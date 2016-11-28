@@ -1,81 +1,90 @@
 <!doctype html>
 <html>
-  <head>
+
+<head>
     <title>Manage Tabs</title>
     <style>
-      body {
-        min-width: 357px;
-        overflow-x: hidden;
-        font-family: "Roboto", arial, sans-serif;
-      }
-
-      img {
-        margin: 5px;
-        border: 2px solid black;
-        vertical-align: middle;
-        width: 75px;
-        height: 75px;
-      }
-
-      a, a:before {
-  transition: all .4s;
-  
-}
-div {
-  max-width: 500px;
-  margin: 2em auto;
-}
-div:hover a {
-  opacity: .4;
-}
-a {
-  position: relative;
-  display: block;
-  max-width: 500px;
-  padding: 10px 10px 10px 35px;
-  box-sizing: border-box;
-  color: #777;
-  background: #fAfAfA;
-  text-decoration: none;
-  font-family: "Open Sans", "Segoe UI", Arial, sans-serif;
-}
-a:before {
-  content: "";
-  position: absolute;
-  left:0; bottom:0; top:0;
-  width: 20px;
-  background: #7F8C9A;
-}
-a:nth-child(even):before {
-  background: #34495E;
-}
-a + a {
-  border-top: 2px solid #ededed;
-}
-div a:hover,
-div a:focus {
-  opacity: 1;
-  padding-left: 55px;
-}
-div a:hover:before,
-div a:focus:before {
-  width: 30px;
-}
-
+        body {
+            min-width: 357px;
+            overflow-x: hidden;
+            font-family: "Roboto", arial, sans-serif;
+        }
+        
+        img {
+            margin: 5px;
+            border: 2px solid black;
+            vertical-align: middle;
+            width: 75px;
+            height: 75px;
+        }
+        
+        a,
+        a:before {
+            transition: all .4s;
+        }
+        
+        div {
+            max-width: 500px;
+            margin: 2em auto;
+        }
+        
+        div:hover a {
+            opacity: .4;
+        }
+        
+        a {
+            position: relative;
+            display: block;
+            max-width: 500px;
+            padding: 10px 10px 10px 35px;
+            box-sizing: border-box;
+            color: #777;
+            background: #fAfAfA;
+            text-decoration: none;
+            font-family: "Open Sans", "Segoe UI", Arial, sans-serif;
+        }
+        
+        a:before {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            top: 0;
+            width: 20px;
+            background: #7F8C9A;
+        }
+        
+        a:nth-child(even):before {
+            background: #34495E;
+        }
+        
+        a+a {
+            border-top: 2px solid #ededed;
+        }
+        
+        div a:hover,
+        div a:focus {
+            opacity: 1;
+            padding-left: 55px;
+        }
+        
+        div a:hover:before,
+        div a:focus:before {
+            width: 30px;
+        }
+        
         .closeIcon {
             background-image: url('close3.png');
-
         }
-
+        
         .closeIcon:hover {
             /*background-image: url('images/close3.png');*/
             -webkit-filter: grayscale(100%);
             -moz-filter: grayscale(100%);
             filter: grayscale(100%);
         }
-
-
-            input[type="text"] {
+        
+        input[type="text"] {
             margin-top: 8px;
             padding: 4px;
             border-radius: 2px;
@@ -84,23 +93,23 @@ div a:focus:before {
             line-height: 24px;
             width: 320px;
         }
-
+        
         input[type="text"]:focus {
             background: #eefefa;
             box-shadow: 0 0 7px 0 #c0d3da;
         }
-
+        
         .txt {
-  position: relative;
-  display: block;
-  max-width: 500px;
-  box-sizing: border-box;
-  color: #777;
-  background: #fAfAfA;
-  text-decoration: none;
-  font-family: "Open Sans", "Segoe UI", Arial, sans-serif;
+            position: relative;
+            display: block;
+            max-width: 500px;
+            box-sizing: border-box;
+            color: #777;
+            background: #fAfAfA;
+            text-decoration: none;
+            font-family: "Open Sans", "Segoe UI", Arial, sans-serif;
         }
-
+        
         #btnRemove {
             padding: 8px;
             background-color: #7F8C9A;
@@ -111,30 +120,30 @@ div a:focus:before {
             color: #fff;
             font-weight: bold;
         }
-
+        
         #btnRemove:hover {
             background-color: #34495E;
         }
-
+        
         #ulServices {
             margin: 0;
             padding: 6px;
         }
     </style>
-
     <script src="managetab.js"></script>
+</head>
 
-  </head>
-  <body>
+<body>
     <ul style="list-style-type: none;" id="ulServices">
-      <li><input type="checkbox" id="liGoogle" name="google">Remove Google Search Tabs</input></li>
-      <li><input type="text" id="txtRemove" placeholder="Remove Tabs Containing Letter"></input></li>
-      <li style="padding-top:10px;"><input id="btnRemove" type="button" value="Remove"/></li>
+        <li><input type="checkbox" id="liGoogle" name="google">Remove Google Search Tabs</input>
+        </li>
+        <li><input type="text" id="txtRemove" placeholder="Remove Tabs Containing Letter"></input>
+        </li>
+        <li style="padding-top:10px;"><input id="btnRemove" type="button" value="Remove" /></li>
     </ul>
-
     <div id="dvList">
-	</div>
+    </div>
     </ul>
-  </body>
-</html>
+</body>
 
+</html>
