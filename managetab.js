@@ -9,7 +9,7 @@ var googleTabs = {
                 window.tabs.forEach(function(tab) {
                     var tempUrl = tab.url;
                     if (isGoogle) {
-                        if (tempUrl.indexOf("www.google.com") > -1) {
+                        if (tempUrl.indexOf("google.com") > -1) {
                             chrome.tabs.remove(parseInt(tab.id));
                             document.getElementById(tab.id).remove();
                         }
