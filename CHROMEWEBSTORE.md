@@ -1,24 +1,24 @@
-# Chrome Web Store Listing — ManageTab
+# Chrome Web Store Listing — Manage Tab
 
 > Last Updated: 2026-07-08
 
 ## Store Listing
 
 **Extension Name** [REQUIRED]
-ManageTab
+Manage Tab
 
 **Short Description** [REQUIRED]
 Manages tabs for chrome. Easily discard inactive tabs and remove specific ones.
 
 **Detailed Description** [REQUIRED]
-ManageTab is a simple utility to help you organize your browsing experience. 
+Manage Tab is a simple utility to help you organize your browsing experience. 
 It lists all your open tabs and provides quick actions to close, discard, or select tabs directly from the extension popup. You can quickly snooze (discard) inactive tabs to save memory, or remove multiple tabs at once by searching for a specific URL keyword.
 
 **Category** [REQUIRED]
 Productivity
 
 **Single Purpose** [REQUIRED]
-ManageTab allows users to easily manage, discard, and close multiple inactive or unwanted browser tabs from a simple popup interface.
+Manage Tab allows users to easily manage, discard, and close multiple inactive or unwanted browser tabs from a simple popup interface.
 
 **Primary Language** [REQUIRED]
 English
@@ -28,6 +28,7 @@ English
 | Permission | Type | Justification |
 |------------|------|---------------|
 | `tabs` | permissions | The tabs permission is required to list all open tabs, read their URLs to filter and remove them based on user input, and to execute tab discard and close actions. |
+| `storage` | permissions | Required to save tabs locally to the browser so users can access them later. |
 
 **Remote Code Justification** (If prompted by the dashboard)
 This extension does not use any remote code. All code is bundled within the extension package.

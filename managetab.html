@@ -3,20 +3,40 @@
 
 <head>
     <title>Manage Tabs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root {
+        :root, :root[data-theme="light"] {
             --border-color: #e5e7eb;
             --text-color: #374151;
             --bg-color: #ffffff;
             --hover-bg: #f3f4f6;
-            --primary-btn: #4b5563;
-            --primary-btn-hover: #1f2937;
+            --discarded-bg: #f9fafb;
+        }
+
+        :root[data-theme="dark"] {
+            --border-color: #3c4043;
+            --text-color: #ffffff;
+            --bg-color: #202124;
+            --hover-bg: #303134;
+            --discarded-bg: #171717;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --border-color: #3c4043;
+                --text-color: #ffffff;
+                --bg-color: #202124;
+                --hover-bg: #303134;
+                --discarded-bg: #171717;
+            }
         }
 
         body,
         input,
         button {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
         body {
@@ -31,61 +51,6 @@
         .controls-group {
             border-bottom: 1px solid var(--border-color);
             margin-bottom: 8px;
-        }
-
-        .controls-summary {
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            padding: 4px 0 12px 0;
-            user-select: none;
-            outline: none;
-            color: var(--text-color);
-        }
-
-        .controls {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding-bottom: 12px;
-        }
-
-        .controls label {
-            display: flex;
-            align-items: center;
-            font-size: 13px;
-            cursor: pointer;
-            gap: 6px;
-        }
-
-        input[type="text"] {
-            padding: 6px 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            font-size: 13px;
-            outline: none;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        input[type="text"]:focus {
-            border-color: #9ca3af;
-        }
-
-        button {
-            padding: 6px 12px;
-            background-color: white;
-            color: var(--text-color);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            width: 100%;
-        }
-
-        button:hover {
-            background-color: var(--hover-bg);
         }
 
         /* Tab List Section */
@@ -106,7 +71,12 @@
         }
 
         .tab-item.discarded {
-            opacity: 0.5;
+            opacity: 0.4;
+            background-color: var(--discarded-bg);
+        }
+
+        .tab-item.discarded:hover {
+            opacity: 0.6;
             background-color: var(--hover-bg);
         }
 
@@ -135,7 +105,8 @@
         }
 
         .tab-close,
-        .tab-snooze {
+        .tab-snooze,
+        .tab-save {
             width: 14px;
             height: 14px;
             opacity: 0.5;
@@ -151,7 +122,8 @@
         }
 
         .tab-close:hover,
-        .tab-snooze:hover {
+        .tab-snooze:hover,
+        .tab-save:hover {
             opacity: 1;
         }
     </style>
@@ -159,18 +131,31 @@
 </head>
 
 <body>
-    <details class="controls-group">
-        <summary class="controls-summary" style="display: flex; justify-content: space-between; align-items: center;">
-            <span>Options</span>
-            <span id="btnDiscardIcon" title="Discard Inactive Tabs" class="tab-snooze">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    <div class="controls-group" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0 12px 0;">
+        <span id="mainLabel" style="font-size: 13px; font-weight: 600; color: var(--text-color);">Tabs</span>
+        <div style="display: flex; gap: 8px;">
+            <span id="btnThemeToggle" title="Toggle Theme" class="tab-save">
+                <svg id="iconMoon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                <svg id="iconSun" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
             </span>
-        </summary>
-        <div class="controls">
-            <input type="text" id="txtRemove" placeholder="Remove tabs containing text...">
-            <button id="btnRemove" type="button">Remove Selected Tabs</button>
+            <span id="btnClearAllSavedIcon" title="Clear All Saved Tabs" class="tab-save" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </span>
+            <span id="btnRestoreAllIcon" title="Restore All Saved Tabs" class="tab-save" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            </span>
+            <span id="btnSaveAllIcon" title="Save All Tabs" class="tab-save">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+            </span>
+            <span id="btnDiscardIcon" title="Discard Inactive Tabs" class="tab-snooze">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h6l-6 8h6"></path><path d="M14 4h6l-6 8h6"></path></svg>
+            </span>
         </div>
-    </details>
+    </div>
+    <div id="savedTabsGroup" style="display: none; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px;">
+        <div id="dvSavedList" style="display: flex; flex-direction: column;">
+        </div>
+    </div>
     <div id="dvList">
     </div>
 </body>

@@ -1,20 +1,25 @@
-Privacy Policy for ManageTab
+Privacy Policy for Manage Tabs
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
-ManageTab is a browser extension designed to help you manage your open tabs. We respect your privacy and are committed to protecting it.
+Manage Tabs is a browser extension designed to help you manage your open tabs, free up system memory, and save tab sessions. We respect your privacy and are committed to protecting it.
 
 ## What Data We Access
-To function properly, ManageTab reads the URLs and titles of the tabs you currently have open in your browser (classified as "Web history" by Chrome Web Store policies). This is required to allow you to search, filter, close, and discard specific tabs based on your input.
+To function properly, Manage Tabs accesses the following information:
+1. **Tabs Data (Web history):** The extension reads the URLs, titles, and favicons of the tabs you currently have open in your browser. This is strictly required to display your active tabs in the extension popup and allow you to close, sleep (discard), or save them.
+2. **Local Storage:** The extension reads and writes to your browser's local storage to securely store your "Saved Tabs" list and your theme preferences (Light/Dark mode).
 
 ## How Data Is Processed and Stored
-All data processing happens entirely locally on your device. ManageTab does **not** store your browsing history persistently, and it does **not** transmit any of your data to external servers or over the internet.
+All data processing happens entirely locally on your device. Manage Tabs does **not** transmit any of your data to external servers or over the internet. When you choose to "Save" a tab, its URL and title are stored securely inside your own local browser profile. 
+
+## Remote Code Use
+This extension is fully self-contained. It does not execute or load any remote code. All HTML, JavaScript logic, and vector graphics are bundled directly within the extension package.
 
 ## Third-Party Services
-This extension does not use any analytics, tracking, or third-party services. Your data remains entirely within your browser.
+This extension does not use any analytics, telemetry, or third-party tracking services. Your data remains entirely private and within your browser.
 
 ## Data Sharing
-We do not sell, trade, or otherwise transfer any of your information to outside parties.
+We do not sell, trade, or otherwise transfer any of your information to outside parties under any circumstances. We do not use your data for unrelated purposes, nor do we use it to determine creditworthiness.
 
 ## Contact
 If you have any privacy inquiries or questions, please contact the developer at [Your Email Address].
