@@ -11,8 +11,15 @@ Manage Tab
 Manages tabs for chrome. Easily discard inactive tabs and remove specific ones.
 
 **Detailed Description** [REQUIRED]
-Manage Tab is a simple utility to help you organize your browsing experience. 
-It lists all your open tabs and provides quick actions to close, discard, or select tabs directly from the extension popup. You can quickly snooze (discard) inactive tabs to save memory, or remove multiple tabs at once by searching for a specific URL keyword.
+### Overview
+Manage Tab is a powerful, lightweight browser extension built to bring order to tab chaos. When your browser is overwhelmed with dozens of open tabs, it causes memory bloat, high CPU usage, and mental clutter. Manage Tab solves this by providing a centralized hub where you can view, organize, discard, and securely save your tabs for both online and offline use—giving you back control over your workspace and system resources.
+
+### How Our Features Solve Your Problems
+- **Active Tab Management:** View a clean list of all open tabs. Instantly switch to, close, or snooze (discard) tabs. *Solves the problem of losing tabs in a crowded window and struggling to find what you need.*
+- **One-Click Snoozing (Discarding):** Put inactive tabs to sleep with a single click, or discard all inactive tabs at once. *Solves the problem of Chrome consuming massive amounts of RAM and draining your battery.*
+- **Bookmarked Tabs:** Save important tabs to a local list before closing them, so you can easily restore them later. Export and import these backups anytime. *Solves the problem of losing research or reading material when you need to clear your active window.*
+- **Offline Tab Saving:** Store entire webpages locally as web archives. These files are saved to your device and can be opened directly in the browser even without an internet connection. *Solves the problem of needing to reference important pages when traveling or when the original website goes down.*
+- **Privacy First & Fully Local:** Everything happens on your device. There is no cloud syncing, no telemetry, and no remote code. *Solves the problem of data privacy and security concerns.*
 
 **Category** [REQUIRED]
 Productivity
@@ -28,7 +35,10 @@ English
 | Permission | Type | Justification |
 |------------|------|---------------|
 | `tabs` | permissions | The tabs permission is required to list all open tabs, read their URLs to filter and remove them based on user input, and to execute tab discard and close actions. |
-| `storage` | permissions | Required to save tabs locally to the browser so users can access them later. |
+| `storage` | permissions | Required to save bookmarked and offline tabs metadata locally to the browser so users can access them later. |
+| `pageCapture` | permissions | Required to capture active web pages as full MHTML blobs when users request to save them for offline viewing. |
+| `downloads` | permissions | Required to seamlessly download the captured MHTML offline files to the user's local disk, and delete them if the user unsaves the tab. |
+| `downloads.open` | permissions | Required to natively open the locally saved MHTML offline files directly in the browser. |
 
 **Remote Code Justification** (If prompted by the dashboard)
 This extension does not use any remote code. All code is bundled within the extension package.

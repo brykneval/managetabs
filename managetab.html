@@ -3,11 +3,10 @@
 
 <head>
     <title>Manage Tabs</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="fonts/inter.css">
     <style>
-        :root, :root[data-theme="light"] {
+        :root,
+        :root[data-theme="light"] {
             --border-color: #e5e7eb;
             --text-color: #374151;
             --bg-color: #ffffff;
@@ -106,7 +105,8 @@
 
         .tab-close,
         .tab-snooze,
-        .tab-save {
+        .tab-save,
+        .tab-download {
             width: 14px;
             height: 14px;
             opacity: 0.5;
@@ -123,41 +123,190 @@
 
         .tab-close:hover,
         .tab-snooze:hover,
-        .tab-save:hover {
+        .tab-save:hover,
+        .tab-download:hover {
             opacity: 1;
+        }
+
+        .setting-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px;
+            margin: 0 -8px;
+            border-radius: 4px;
+        }
+
+        .setting-item:hover {
+            background-color: var(--hover-bg);
         }
     </style>
     <script src="managetab.js"></script>
 </head>
 
 <body>
-    <div class="controls-group" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0 12px 0;">
-        <span id="mainLabel" style="font-size: 13px; font-weight: 600; color: var(--text-color);">Tabs</span>
-        <div style="display: flex; gap: 8px;">
-            <span id="btnThemeToggle" title="Toggle Theme" class="tab-save">
-                <svg id="iconMoon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-                <svg id="iconSun" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-            </span>
-            <span id="btnClearAllSavedIcon" title="Clear All Saved Tabs" class="tab-save" style="display: none;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            </span>
-            <span id="btnRestoreAllIcon" title="Restore All Saved Tabs" class="tab-save" style="display: none;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-            </span>
-            <span id="btnSaveAllIcon" title="Save All Tabs" class="tab-save">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-            </span>
-            <span id="btnDiscardIcon" title="Discard Inactive Tabs" class="tab-snooze">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h6l-6 8h6"></path><path d="M14 4h6l-6 8h6"></path></svg>
-            </span>
+    <div id="mainView">
+        <div class="controls-group"
+            style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0 12px 0;">
+            <div id="titleGroup" style="display: flex; align-items: center; gap: 4px; cursor: default;">
+                <span id="collapseIcon" style="display: none; align-items: center; width: 14px; height: 14px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </span>
+                <span id="mainLabel" style="font-size: 13px; font-weight: 600; color: var(--text-color);">Tabs</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <span id="btnOpenSettings" title="Settings" class="tab-save">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
+                    </svg>
+                </span>
+            </div>
+        </div>
+        <div id="savedTabsGroup"
+            style="display: none; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px;">
+            <div id="dvSavedList" style="display: flex; flex-direction: column;">
+            </div>
+        </div>
+        <div id="offlineSavedTabsGroup"
+            style="display: none; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px;">
+            <div id="titleGroupOffline"
+                style="display: flex; align-items: center; gap: 4px; cursor: pointer; padding-bottom: 4px;">
+                <span id="collapseIconOffline" style="display: flex; align-items: center; width: 14px; height: 14px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </span>
+                <span style="font-size: 13px; font-weight: 600; color: var(--text-color);">Saved Tabs</span>
+            </div>
+            <div id="dvOfflineSavedList" style="display: flex; flex-direction: column; border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 4px;">
+            </div>
+        </div>
+        <div id="dvList">
         </div>
     </div>
-    <div id="savedTabsGroup" style="display: none; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px;">
-        <div id="dvSavedList" style="display: flex; flex-direction: column;">
+
+    <div id="settingsView" style="display: none;">
+        <div class="controls-group"
+            style="display: flex; justify-content: flex-start; align-items: center; padding: 4px 0 12px 0;">
+            <div id="btnCloseSettings" style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <span class="tab-save" style="opacity: 1;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                </span>
+                <span style="font-size: 13px; font-weight: 600; color: var(--text-color);">Settings</span>
+            </div>
+        </div>
+        <div id="settingsOptions" style="display: flex; flex-direction: column; gap: 4px; padding-top: 4px;">
+            <div class="setting-item" id="btnThemeToggle">
+                <span class="tab-save" style="opacity: 1; margin: 0;">
+                    <svg id="iconMoon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="iconSun" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </span>
+                <span style="font-size: 13px;">Toggle Theme</span>
+            </div>
+            <div class="setting-item" id="btnSaveAllIcon">
+                <span class="tab-save" style="opacity: 1; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </span>
+                <span style="font-size: 13px;">Bookmark All Tabs</span>
+            </div>
+            <div class="setting-item" id="btnDiscardIcon">
+                <span class="tab-save" style="opacity: 1; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 12h6l-6 8h6"></path>
+                        <path d="M14 4h6l-6 8h6"></path>
+                    </svg>
+                </span>
+                <span style="font-size: 13px;">Discard Inactive Tabs</span>
+            </div>
+            <div class="setting-item" id="btnImportIcon">
+                <span class="tab-save" style="opacity: 1; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </span>
+                <span style="font-size: 13px;">Import Tabs</span>
+            </div>
+            <div class="setting-item" id="btnExportIcon" style="display: none;">
+                <span class="tab-save" style="opacity: 1; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </span>
+                <span style="font-size: 13px;">Export Tabs</span>
+            </div>
+            <div class="setting-item" id="btnRestoreAllIcon" style="display: none;">
+                <span class="tab-save" style="opacity: 1; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                </span>
+                <span style="font-size: 13px;">Restore All Bookmarked Tabs</span>
+            </div>
+            <div class="setting-item" id="btnClearAllSavedIcon" style="display: none;">
+                <span class="tab-save" style="opacity: 1; margin: 0; color: #ef4444;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </span>
+                <span style="font-size: 13px; color: #ef4444;">Clear All Bookmarked Tabs</span>
+            </div>
+            <div class="setting-item" id="btnClearAllOfflineSavedIcon" style="display: none;">
+                <span class="tab-save" style="opacity: 1; margin: 0; color: #ef4444;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </span>
+                <span style="font-size: 13px; color: #ef4444;">Clear All Offline Saved Tabs</span>
+            </div>
         </div>
     </div>
-    <div id="dvList">
-    </div>
+    <input type="file" id="fileImport" accept=".json" style="display: none;" />
 </body>
 
 </html>

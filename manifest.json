@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Manage Tab",
   "description": "Manages tabs for chrome",
-  "version": "0.3",
+  "version": "0.4",
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
@@ -19,6 +19,9 @@
   },
   "permissions": [
     "tabs",
-    "storage"
+    "storage",
+    "pageCapture",
+    "downloads",
+    "downloads.open"
   ]
 }
