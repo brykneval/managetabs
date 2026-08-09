@@ -273,6 +273,33 @@
                 </span>
                 <span style="font-size: 13px;">Export Tabs</span>
             </div>
+            <div class="setting-item" style="cursor: default;">
+                <span class="tab-save" style="opacity: 1; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </span>
+                <div style="font-size: 13px; flex-grow: 1; display: flex; align-items: center; gap: 6px;">
+                    Keep history of
+                    <select id="historyDaysInput" style="padding: 2px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-color);">
+                        <option value="OFF">OFF</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="7">7</option>
+                        <option value="15">15</option>
+                        <option value="30">30</option>
+                    </select>
+                    days
+                </div>
+            </div>
+            <div class="setting-item" id="btnDeleteHistory">
+                <span class="tab-save" style="opacity: 1; margin: 0; color: #ef4444;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </span>
+                <span style="font-size: 13px; color: #ef4444;">Delete old history now</span>
+            </div>
             <div class="setting-item" id="btnRestoreAllIcon" style="display: none;">
                 <span class="tab-save" style="opacity: 1; margin: 0;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"

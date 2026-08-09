@@ -196,9 +196,15 @@ var googleTabs = {
     exportTabs: async function () {
         const savedTabs = await googleTabs.getSavedTabs();
         const offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
+        const result = await chrome.storage.local.get(['theme', 'historyRetentionDays']);
+
         const exportData = {
             savedTabs: savedTabs,
-            offlineSavedTabs: offlineSavedTabs
+            offlineSavedTabs: offlineSavedTabs,
+            settings: {
+                theme: result.theme,
+                historyRetentionDays: result.historyRetentionDays
+            }
         };
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
         const downloadAnchorNode = document.createElement('a');
@@ -232,6 +238,22 @@ var googleTabs = {
                     }
                     if (Array.isArray(importedData.offlineSavedTabs)) {
                         importedOffline = importedData.offlineSavedTabs;
+                    }
+                    if (importedData.settings) {
+                        let newSettings = {};
+                        if (importedData.settings.theme) {
+                            newSettings.theme = importedData.settings.theme;
+                            document.documentElement.setAttribute('data-theme', newSettings.theme);
+                            googleTabs.updateThemeIcon(newSettings.theme);
+                        }
+                        if (importedData.settings.historyRetentionDays !== undefined) {
+                            newSettings.historyRetentionDays = importedData.settings.historyRetentionDays;
+                            const input = document.getElementById('historyDaysInput');
+                            if (input) input.value = newSettings.historyRetentionDays;
+                        }
+                        if (Object.keys(newSettings).length > 0) {
+                            await chrome.storage.local.set(newSettings);
+                        }
                     }
                 }
 
@@ -557,6 +579,51 @@ var googleTabs = {
         await googleTabs.setOfflineSavedTabs(offlineSavedTabs);
         googleTabs.renderOfflineSavedTabs();
     },
+    initHistorySettings: function() {
+        chrome.storage.local.get(['historyRetentionDays', 'lastHistoryCleanup'], function(result) {
+            let days = result.historyRetentionDays;
+            if (days === undefined) {
+                days = "OFF";
+                chrome.storage.local.set({ historyRetentionDays: days });
+            }
+            const input = document.getElementById('historyDaysInput');
+            if (input) {
+                input.value = days;
+                input.addEventListener('change', function(e) {
+                    let newDays = e.target.value;
+                    chrome.storage.local.set({ historyRetentionDays: newDays });
+                });
+            }
+            if (days !== "OFF") {
+                let now = new Date().getTime();
+                let lastCleanup = result.lastHistoryCleanup || 0;
+                let oneDayMs = 24 * 60 * 60 * 1000;
+                if (now - lastCleanup >= oneDayMs) {
+                    googleTabs.deleteOldHistory(parseInt(days));
+                    chrome.storage.local.set({ lastHistoryCleanup: now });
+                }
+            }
+        });
+    },
+
+    deleteOldHistory: async function(days) {
+        if (!days || days === "OFF") return;
+        const millisecondsPerDay = 1000 * 60 * 60 * 24;
+        const deleteBeforeTime = (new Date()).getTime() - (days * millisecondsPerDay);
+        
+        if (chrome.history && chrome.history.deleteRange) {
+            return new Promise((resolve) => {
+                chrome.history.deleteRange({
+                    startTime: 0,
+                    endTime: deleteBeforeTime
+                }, function() {
+                    console.log('Old history deleted up to ' + new Date(deleteBeforeTime).toLocaleString());
+                    resolve();
+                });
+            });
+        }
+    },
+
     discardInactiveTabs: async function () {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         const tabs = await chrome.tabs.query({ currentWindow: true });
@@ -739,7 +806,30 @@ var googleTabs = {
 
 document.addEventListener('DOMContentLoaded', function () {
     googleTabs.initTheme();
+    googleTabs.initHistorySettings();
     var discardIcon = document.getElementById("btnDiscardIcon");
+    var btnDeleteHistory = document.getElementById("btnDeleteHistory");
+    if (btnDeleteHistory) {
+        btnDeleteHistory.addEventListener("click", function() {
+            chrome.storage.local.get(['historyRetentionDays'], async function(result) {
+                let days = result.historyRetentionDays || "OFF";
+                if (days !== "OFF") {
+                    await googleTabs.deleteOldHistory(parseInt(days));
+                    var origText = btnDeleteHistory.querySelector('span:nth-child(2)').textContent;
+                    btnDeleteHistory.querySelector('span:nth-child(2)').textContent = 'History Deleted!';
+                    setTimeout(function() {
+                        btnDeleteHistory.querySelector('span:nth-child(2)').textContent = origText;
+                    }, 2000);
+                } else {
+                    var origText = btnDeleteHistory.querySelector('span:nth-child(2)').textContent;
+                    btnDeleteHistory.querySelector('span:nth-child(2)').textContent = 'Setting is OFF!';
+                    setTimeout(function() {
+                        btnDeleteHistory.querySelector('span:nth-child(2)').textContent = origText;
+                    }, 2000);
+                }
+            });
+        });
+    }
     var saveAllBtn = document.getElementById("btnSaveAllIcon");
     var restoreAllBtn = document.getElementById("btnRestoreAllIcon");
     var clearAllBtn = document.getElementById("btnClearAllSavedIcon");
