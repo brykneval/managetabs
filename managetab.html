@@ -32,6 +32,14 @@
             }
         }
 
+        html {
+            box-sizing: border-box;
+        }
+
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+
         body,
         input,
         button {
@@ -40,22 +48,108 @@
 
         body {
             width: 320px;
+            max-height: 600px;
             margin: 0;
             padding: 8px;
             color: var(--text-color);
             background: var(--bg-color);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Custom sleek scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) transparent;
         }
 
         /* Control Section */
         .controls-group {
             border-bottom: 1px solid var(--border-color);
             margin-bottom: 8px;
+            flex-shrink: 0;
         }
 
-        /* Tab List Section */
+        /* Views */
+        #mainView {
+            display: flex;
+            flex-direction: column;
+            max-height: 100%;
+            min-height: 0;
+            flex: 1 1 auto;
+            overflow: hidden;
+        }
+
+        #settingsView {
+            display: none;
+            flex-direction: column;
+            max-height: 100%;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex: 1 1 auto;
+        }
+
+        /* Section Containers */
+        #savedTabsGroup {
+            flex-shrink: 0;
+            min-height: 0;
+        }
+
+        #dvSavedList {
+            display: flex;
+            flex-direction: column;
+            max-height: 220px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+        }
+
+        #offlineSavedTabsGroup {
+            flex-shrink: 0;
+            min-height: 0;
+        }
+
+        #titleGroupOffline {
+            flex-shrink: 0;
+        }
+
+        #dvOfflineSavedList {
+            display: flex;
+            flex-direction: column;
+            max-height: 200px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+        }
+
+        /* Active Tab List Section */
         #dvList {
             display: flex;
             flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+            flex: 1 1 auto;
         }
 
         .tab-item {
@@ -141,6 +235,71 @@
         .setting-item:hover {
             background-color: var(--hover-bg);
         }
+
+        /* Orderable Rows Styles */
+        #btnToggleOrder {
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s, color 0.2s;
+        }
+
+        #btnToggleOrder:hover {
+            opacity: 1;
+        }
+
+        #btnToggleOrder.active {
+            opacity: 1;
+            color: #3b82f6;
+        }
+
+        .tab-drag-handle {
+            width: 12px;
+            height: 12px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            opacity: 0.4;
+            flex-shrink: 0;
+            margin-right: -2px;
+        }
+
+        .tab-drag-handle:hover {
+            opacity: 1;
+        }
+
+        body.orderable-mode .tab-drag-handle {
+            display: flex;
+        }
+
+        body.orderable-mode .tab-item {
+            cursor: grab;
+        }
+
+        body.orderable-mode .tab-item:active {
+            cursor: grabbing;
+        }
+
+        .tab-item.dragging {
+            opacity: 0.35;
+            background-color: var(--hover-bg);
+        }
+
+        .tab-item.drag-over-top {
+            border-top: 2px solid #3b82f6 !important;
+        }
+
+        .tab-item.drag-over-bottom {
+            border-bottom: 2px solid #3b82f6 !important;
+        }
+
+        .tab-icon,
+        .tab-close,
+        .tab-snooze,
+        .tab-save,
+        .tab-download {
+            -webkit-user-drag: none;
+        }
     </style>
     <script src="managetab.js"></script>
 </head>
@@ -158,7 +317,14 @@
                 </span>
                 <span id="mainLabel" style="font-size: 13px; font-weight: 600; color: var(--text-color);">Tabs</span>
             </div>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <span id="btnToggleOrder" title="Enable row reordering" class="tab-save">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="7 15 12 20 17 15"></polyline>
+                        <polyline points="7 9 12 4 17 9"></polyline>
+                    </svg>
+                </span>
                 <span id="btnOpenSettings" title="Settings" class="tab-save">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -231,6 +397,16 @@
                     </svg>
                 </span>
                 <span style="font-size: 13px;">Toggle Theme</span>
+            </div>
+            <div class="setting-item" id="btnSettingOrderToggle">
+                <span class="tab-save" style="opacity: 1; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="7 15 12 20 17 15"></polyline>
+                        <polyline points="7 9 12 4 17 9"></polyline>
+                    </svg>
+                </span>
+                <span style="font-size: 13px;" id="lblSettingOrderToggle">Enable Row Reordering</span>
             </div>
             <div class="setting-item" id="btnSaveAllIcon">
                 <span class="tab-save" style="opacity: 1; margin: 0;">

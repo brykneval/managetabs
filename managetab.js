@@ -5,12 +5,16 @@ const ICONS = {
     cloud_unsave: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>',
     snooze: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h6l-6 8h6"></path><path d="M14 4h6l-6 8h6"></path></svg>',
     close: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+    drag_handle: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>',
     globe: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>'
 };
 
 var googleTabs = {
     isSavedTabsCollapsed: true,
     isOfflineSavedTabsCollapsed: true,
+    isOrderable: false,
+    dragSourceItem: null,
+    dragSourceContainer: null,
 
     toggleSavedTabs: function () {
         if (!document.getElementById('collapseIcon') || document.getElementById('collapseIcon').style.display === 'none') {
@@ -59,13 +63,210 @@ var googleTabs = {
         }
     },
 
+    initOrderable: function () {
+        chrome.storage.local.get(['isOrderable'], function (result) {
+            googleTabs.isOrderable = !!result.isOrderable;
+            googleTabs.updateOrderableUI();
+        });
+    },
+
+    toggleOrderable: function () {
+        googleTabs.isOrderable = !googleTabs.isOrderable;
+        chrome.storage.local.set({ isOrderable: googleTabs.isOrderable });
+        googleTabs.updateOrderableUI();
+    },
+
+    updateOrderableUI: function () {
+        const btnToggle = document.getElementById('btnToggleOrder');
+        const lblSetting = document.getElementById('lblSettingOrderToggle');
+        if (googleTabs.isOrderable) {
+            document.body.classList.add('orderable-mode');
+            if (btnToggle) {
+                btnToggle.classList.add('active');
+                btnToggle.title = 'Disable row reordering (Reorder ON)';
+            }
+            if (lblSetting) {
+                lblSetting.textContent = 'Disable Row Reordering';
+            }
+        } else {
+            document.body.classList.remove('orderable-mode');
+            if (btnToggle) {
+                btnToggle.classList.remove('active');
+                btnToggle.title = 'Enable row reordering (Reorder OFF)';
+            }
+            if (lblSetting) {
+                lblSetting.textContent = 'Enable Row Reordering';
+            }
+        }
+
+        document.querySelectorAll('.tab-item').forEach(item => {
+            item.setAttribute('draggable', googleTabs.isOrderable ? 'true' : 'false');
+        });
+    },
+
+    makeRowOrderable: function (listItem) {
+        listItem.setAttribute('draggable', googleTabs.isOrderable ? 'true' : 'false');
+
+        listItem.addEventListener('dragstart', function (e) {
+            if (!googleTabs.isOrderable) {
+                e.preventDefault();
+                return;
+            }
+            if (e.target.closest('.tab-close, .tab-snooze, .tab-save, .tab-download')) {
+                e.preventDefault();
+                return;
+            }
+            googleTabs.dragSourceItem = this;
+            googleTabs.dragSourceContainer = this.parentNode;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', this.id || this.getAttribute('data-url') || '');
+            this.classList.add('dragging');
+        });
+
+        listItem.addEventListener('dragover', function (e) {
+            if (!googleTabs.isOrderable || !googleTabs.dragSourceItem) return;
+            if (this.parentNode !== googleTabs.dragSourceContainer) return;
+            if (this === googleTabs.dragSourceItem) return;
+
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            const rect = this.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            if (e.clientY < midY) {
+                this.classList.add('drag-over-top');
+                this.classList.remove('drag-over-bottom');
+            } else {
+                this.classList.add('drag-over-bottom');
+                this.classList.remove('drag-over-top');
+            }
+        });
+
+        listItem.addEventListener('dragleave', function () {
+            this.classList.remove('drag-over-top');
+            this.classList.remove('drag-over-bottom');
+        });
+
+        listItem.addEventListener('drop', async function (e) {
+            if (!googleTabs.isOrderable || !googleTabs.dragSourceItem) return;
+            if (this.parentNode !== googleTabs.dragSourceContainer) return;
+            if (this === googleTabs.dragSourceItem) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const isAbove = this.classList.contains('drag-over-top');
+            this.classList.remove('drag-over-top');
+            this.classList.remove('drag-over-bottom');
+
+            const container = this.parentNode;
+            const source = googleTabs.dragSourceItem;
+
+            if (isAbove) {
+                container.insertBefore(source, this);
+            } else {
+                container.insertBefore(source, this.nextSibling);
+            }
+
+            if (container.id === 'dvList') {
+                await googleTabs.syncActiveTabsOrder(container, source);
+            } else if (container.id === 'dvSavedList') {
+                await googleTabs.syncSavedTabsOrder(container);
+            } else if (container.id === 'dvOfflineSavedList') {
+                await googleTabs.syncOfflineSavedTabsOrder(container);
+            }
+        });
+
+        listItem.addEventListener('dragend', function () {
+            if (googleTabs.dragSourceItem) {
+                googleTabs.dragSourceItem.classList.remove('dragging');
+            }
+            document.querySelectorAll('.tab-item').forEach(el => {
+                el.classList.remove('drag-over-top');
+                el.classList.remove('drag-over-bottom');
+            });
+            googleTabs.dragSourceItem = null;
+            googleTabs.dragSourceContainer = null;
+        });
+    },
+
+    syncActiveTabsOrder: async function (container, movedItem) {
+        if (!chrome.tabs || !chrome.tabs.move) return;
+        try {
+            const tabElements = Array.from(container.querySelectorAll('.tab-item'));
+            const tabId = parseInt(movedItem.id);
+            const windowIdAttr = movedItem.getAttribute('data-window-id');
+            const windowId = windowIdAttr ? parseInt(windowIdAttr) : null;
+
+            const sameWindowTabs = windowId !== null
+                ? tabElements.filter(el => parseInt(el.getAttribute('data-window-id')) === windowId)
+                : tabElements;
+
+            const targetIndex = sameWindowTabs.indexOf(movedItem);
+            if (targetIndex !== -1 && !isNaN(tabId)) {
+                await chrome.tabs.move(tabId, { index: targetIndex });
+            }
+        } catch (err) {
+            console.warn("Could not sync active tab move:", err);
+        }
+    },
+
+    syncSavedTabsOrder: async function (container) {
+        try {
+            let savedTabs = await googleTabs.getSavedTabs();
+            const visibleItems = Array.from(container.querySelectorAll('.tab-item'));
+            const visibleUrls = visibleItems.map(el => el.getAttribute('data-url')).filter(Boolean);
+
+            const visibleIndicesInSaved = [];
+            savedTabs.forEach((tab, idx) => {
+                if (visibleUrls.includes(tab.url)) {
+                    visibleIndicesInSaved.push(idx);
+                }
+            });
+
+            const tabMap = new Map(savedTabs.map(t => [t.url, t]));
+            const reorderedVisible = visibleUrls.map(url => tabMap.get(url)).filter(Boolean);
+
+            visibleIndicesInSaved.forEach((savedIdx, i) => {
+                if (reorderedVisible[i]) {
+                    savedTabs[savedIdx] = reorderedVisible[i];
+                }
+            });
+
+            await googleTabs.setSavedTabs(savedTabs);
+        } catch (err) {
+            console.warn("Could not sync saved tabs order:", err);
+        }
+    },
+
+    syncOfflineSavedTabsOrder: async function (container) {
+        try {
+            let offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
+            const visibleItems = Array.from(container.querySelectorAll('.tab-item'));
+            const visibleUrls = visibleItems.map(el => el.getAttribute('data-url')).filter(Boolean);
+
+            const tabMap = new Map(offlineSavedTabs.map(t => [t.url, t]));
+            const newOffline = visibleUrls.map(url => tabMap.get(url)).filter(Boolean);
+
+            offlineSavedTabs.forEach(t => {
+                if (!visibleUrls.includes(t.url)) {
+                    newOffline.push(t);
+                }
+            });
+
+            await googleTabs.setOfflineSavedTabs(newOffline);
+        } catch (err) {
+            console.warn("Could not sync offline saved tabs order:", err);
+        }
+    },
+
     openSettings: function () {
         document.getElementById('mainView').style.display = 'none';
-        document.getElementById('settingsView').style.display = 'block';
+        document.getElementById('settingsView').style.display = 'flex';
     },
 
     closeSettings: function () {
-        document.getElementById('mainView').style.display = 'block';
+        document.getElementById('mainView').style.display = 'flex';
         document.getElementById('settingsView').style.display = 'none';
     },
 
@@ -93,12 +294,15 @@ var googleTabs = {
         if (!theme) {
             theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
+        const iconMoon = document.getElementById('iconMoon');
+        const iconSun = document.getElementById('iconSun');
+        if (!iconMoon || !iconSun) return;
         if (theme === 'dark') {
-            document.getElementById('iconMoon').style.display = 'none';
-            document.getElementById('iconSun').style.display = 'block';
+            iconMoon.style.display = 'none';
+            iconSun.style.display = 'block';
         } else {
-            document.getElementById('iconMoon').style.display = 'block';
-            document.getElementById('iconSun').style.display = 'none';
+            iconMoon.style.display = 'block';
+            iconSun.style.display = 'none';
         }
     },
 
@@ -196,14 +400,18 @@ var googleTabs = {
     exportTabs: async function () {
         const savedTabs = await googleTabs.getSavedTabs();
         const offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
-        const result = await chrome.storage.local.get(['theme', 'historyRetentionDays']);
+        const result = await chrome.storage.local.get(['theme', 'historyRetentionDays', 'isOrderable']);
+
+        const exportedSaved = savedTabs.map((tab, idx) => ({ ...tab, order: idx }));
+        const exportedOffline = offlineSavedTabs.map((tab, idx) => ({ ...tab, order: idx }));
 
         const exportData = {
-            savedTabs: savedTabs,
-            offlineSavedTabs: offlineSavedTabs,
+            savedTabs: exportedSaved,
+            offlineSavedTabs: exportedOffline,
             settings: {
                 theme: result.theme,
-                historyRetentionDays: result.historyRetentionDays
+                historyRetentionDays: result.historyRetentionDays,
+                isOrderable: result.isOrderable || false
             }
         };
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
@@ -251,6 +459,11 @@ var googleTabs = {
                             const input = document.getElementById('historyDaysInput');
                             if (input) input.value = newSettings.historyRetentionDays;
                         }
+                        if (importedData.settings.isOrderable !== undefined) {
+                            newSettings.isOrderable = importedData.settings.isOrderable;
+                            googleTabs.isOrderable = newSettings.isOrderable;
+                            googleTabs.updateOrderableUI();
+                        }
                         if (Object.keys(newSettings).length > 0) {
                             await chrome.storage.local.set(newSettings);
                         }
@@ -258,10 +471,17 @@ var googleTabs = {
                 }
 
                 if (importedSaved.length > 0) {
+                    importedSaved.sort((a, b) => {
+                        if (a.order !== undefined && b.order !== undefined) {
+                            return a.order - b.order;
+                        }
+                        return 0;
+                    });
                     let savedTabs = await googleTabs.getSavedTabs();
                     importedSaved.forEach(imported => {
                         if (imported.url && imported.title && !savedTabs.some(t => t.url === imported.url)) {
-                            savedTabs.push(imported);
+                            const { order, ...rest } = imported;
+                            savedTabs.push(rest);
                         }
                     });
                     await googleTabs.setSavedTabs(savedTabs);
@@ -269,10 +489,16 @@ var googleTabs = {
                 }
 
                 if (importedOffline.length > 0) {
+                    importedOffline.sort((a, b) => {
+                        if (a.order !== undefined && b.order !== undefined) {
+                            return a.order - b.order;
+                        }
+                        return 0;
+                    });
                     let offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
                     importedOffline.forEach(imported => {
                         if (imported.url && imported.title && !offlineSavedTabs.some(t => t.url === imported.url)) {
-                            const { downloadId, ...rest } = imported;
+                            const { order, downloadId, ...rest } = imported;
                             offlineSavedTabs.push(rest);
                         }
                     });
@@ -444,6 +670,12 @@ var googleTabs = {
         filteredSavedTabs.forEach(function (tab) {
             var listItem = document.createElement('div');
             listItem.className = 'tab-item discarded';
+            listItem.setAttribute('data-url', tab.url);
+
+            var dragHandle = document.createElement('span');
+            dragHandle.className = 'tab-drag-handle';
+            dragHandle.title = 'Drag to reorder';
+            dragHandle.innerHTML = ICONS.drag_handle;
 
             var innerImage = document.createElement('img');
             innerImage.src = tab.favIconUrl || ICONS.globe;
@@ -463,9 +695,12 @@ var googleTabs = {
             saveSpan.setAttribute('data-url', tab.url);
             saveSpan.addEventListener('click', googleTabs.unsaveTab);
 
+            listItem.appendChild(dragHandle);
             listItem.appendChild(innerImage);
             listItem.appendChild(innerSpan);
             listItem.appendChild(saveSpan);
+
+            googleTabs.makeRowOrderable(listItem);
 
             fragment.appendChild(listItem);
         });
@@ -518,6 +753,12 @@ var googleTabs = {
         filteredTabs.forEach(function (tab) {
             var listItem = document.createElement('div');
             listItem.className = 'tab-item discarded';
+            listItem.setAttribute('data-url', tab.url);
+
+            var dragHandle = document.createElement('span');
+            dragHandle.className = 'tab-drag-handle';
+            dragHandle.title = 'Drag to reorder';
+            dragHandle.innerHTML = ICONS.drag_handle;
 
             var innerImage = document.createElement('img');
             innerImage.src = tab.favIconUrl || ICONS.globe;
@@ -547,10 +788,13 @@ var googleTabs = {
             removeSpan.setAttribute('data-url', tab.url);
             removeSpan.addEventListener('click', googleTabs.removeOfflineSavedTab);
 
+            listItem.appendChild(dragHandle);
             listItem.appendChild(innerImage);
             listItem.appendChild(innerSpan);
             listItem.appendChild(sizeSpan);
             listItem.appendChild(removeSpan);
+
+            googleTabs.makeRowOrderable(listItem);
 
             fragment.appendChild(listItem);
         });
@@ -656,6 +900,12 @@ var googleTabs = {
             var listItem = document.createElement('div');
             listItem.className = 'tab-item' + (tab.discarded ? ' discarded' : '');
             listItem.id = tab.id;
+            listItem.setAttribute('data-window-id', tab.windowId);
+
+            var dragHandle = document.createElement('span');
+            dragHandle.className = 'tab-drag-handle';
+            dragHandle.title = 'Drag to reorder';
+            dragHandle.innerHTML = ICONS.drag_handle;
 
             var innerImage = document.createElement('img');
             innerImage.src = tab.favIconUrl || ICONS.globe;
@@ -693,12 +943,15 @@ var googleTabs = {
             downloadSpan.setAttribute('data-url', tab.url);
             downloadSpan.addEventListener('click', googleTabs.tabDownload);
 
+            listItem.appendChild(dragHandle);
             listItem.appendChild(innerImage);
             listItem.appendChild(innerSpan);
             listItem.appendChild(downloadSpan);
             listItem.appendChild(saveSpan);
             listItem.appendChild(snoozeSpan);
             listItem.appendChild(closeSpan);
+
+            googleTabs.makeRowOrderable(listItem);
 
             fragment.appendChild(listItem);
         });
@@ -840,10 +1093,19 @@ document.addEventListener('DOMContentLoaded', function () {
     var fileImport = document.getElementById("fileImport");
     var openSettingsBtn = document.getElementById("btnOpenSettings");
     var closeSettingsBtn = document.getElementById("btnCloseSettings");
+    var toggleOrderBtn = document.getElementById("btnToggleOrder");
+    var settingOrderToggleBtn = document.getElementById("btnSettingOrderToggle");
 
+    googleTabs.initOrderable();
     googleTabs.tabListing();
     googleTabs.renderSavedTabs();
     googleTabs.renderOfflineSavedTabs();
+    if (toggleOrderBtn) {
+        toggleOrderBtn.addEventListener("click", googleTabs.toggleOrderable);
+    }
+    if (settingOrderToggleBtn) {
+        settingOrderToggleBtn.addEventListener("click", googleTabs.toggleOrderable);
+    }
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener("click", googleTabs.toggleTheme);
     }

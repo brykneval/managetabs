@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Manage Tab",
-  "description": "Manages tabs for chrome",
+  "name": "ManagePo: Manage Tabs",
+  "description": "Manages tabs for chrome, free up RAM and CPU, add bookmark, save offline, remove history",
   "version": "0.4",
   "icons": {
     "16": "icons/icon-16.png",
@@ -15,7 +15,7 @@
       "128": "icons/icon-128.png"
     },
     "default_popup": "managetab.html",
-    "default_title": "Manage Tabs"
+    "default_title": "ManagePo"
   },
   "permissions": [
     "tabs",
