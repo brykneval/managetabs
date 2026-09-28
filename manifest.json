@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ManagePo: Manage Tabs",
   "description": "Manages tabs for chrome, free up RAM and CPU, add bookmark, save offline, remove history",
-  "version": "0.4",
+  "version": "0.5",
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
@@ -23,6 +23,7 @@
     "pageCapture",
     "downloads",
     "downloads.open",
-    "history"
+    "history",
+    "favicon"
   ]
 }

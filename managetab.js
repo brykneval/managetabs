@@ -9,12 +9,43 @@ const ICONS = {
     globe: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>'
 };
 
+// Start pre-fetching tabs and all storage data immediately at the earliest possible instant
+const initialDataPromise = Promise.all([
+    chrome.tabs.query({}),
+    chrome.storage.local.get([
+        'theme',
+        'isOrderable',
+        'historyRetentionDays',
+        'lastHistoryCleanup',
+        'savedTabs',
+        'offlineSavedTabs'
+    ])
+]);
+
 var googleTabs = {
     isSavedTabsCollapsed: true,
     isOfflineSavedTabsCollapsed: true,
     isOrderable: false,
     dragSourceItem: null,
     dragSourceContainer: null,
+
+    getFaviconUrl: function (url, fallbackFavIconUrl) {
+        if (fallbackFavIconUrl && fallbackFavIconUrl.startsWith('data:image/')) {
+            return fallbackFavIconUrl;
+        }
+        if (url) {
+            try {
+                // Use Chrome's local favicon cache to prevent external network requests (avoids ERR_CONNECTION_REFUSED)
+                const faviconUrl = new URL(chrome.runtime.getURL("/_favicon/"));
+                faviconUrl.searchParams.set("pageUrl", url);
+                faviconUrl.searchParams.set("size", "32");
+                return faviconUrl.toString();
+            } catch (e) {
+                // Ignore URL parsing errors
+            }
+        }
+        return fallbackFavIconUrl || ICONS.globe;
+    },
 
     toggleSavedTabs: function () {
         if (!document.getElementById('collapseIcon') || document.getElementById('collapseIcon').style.display === 'none') {
@@ -354,6 +385,7 @@ var googleTabs = {
         }
 
         await googleTabs.setSavedTabs(savedTabs);
+        await googleTabs.updateActiveTabIcons();
         googleTabs.renderSavedTabs();
     },
 
@@ -373,6 +405,7 @@ var googleTabs = {
         const confirmed = window.confirm("Are you sure you want to clear all bookmarked tabs? This action cannot be undone.");
         if (confirmed) {
             await googleTabs.setSavedTabs([]);
+            await googleTabs.updateActiveTabIcons();
             googleTabs.renderSavedTabs();
         }
     },
@@ -393,14 +426,17 @@ var googleTabs = {
                 }
             });
             await googleTabs.setOfflineSavedTabs([]);
+            await googleTabs.updateActiveTabIcons();
             googleTabs.renderOfflineSavedTabs();
         }
     },
 
     exportTabs: async function () {
-        const savedTabs = await googleTabs.getSavedTabs();
-        const offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
-        const result = await chrome.storage.local.get(['theme', 'historyRetentionDays', 'isOrderable']);
+        const [savedTabs, offlineSavedTabs, result] = await Promise.all([
+            googleTabs.getSavedTabs(),
+            googleTabs.getOfflineSavedTabs(),
+            chrome.storage.local.get(['theme', 'historyRetentionDays', 'isOrderable'])
+        ]);
 
         const exportedSaved = savedTabs.map((tab, idx) => ({ ...tab, order: idx }));
         const exportedOffline = offlineSavedTabs.map((tab, idx) => ({ ...tab, order: idx }));
@@ -526,6 +562,7 @@ var googleTabs = {
             savedTabs.push({ url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
         }
         await googleTabs.setSavedTabs(savedTabs);
+        await googleTabs.updateActiveTabIcons();
         googleTabs.renderSavedTabs();
     },
 
@@ -535,6 +572,7 @@ var googleTabs = {
         let savedTabs = await googleTabs.getSavedTabs();
         savedTabs = savedTabs.filter(t => t.url !== url);
         await googleTabs.setSavedTabs(savedTabs);
+        await googleTabs.updateActiveTabIcons();
         googleTabs.renderSavedTabs();
     },
 
@@ -604,10 +642,9 @@ var googleTabs = {
         });
     },
 
-    renderSavedTabs: async function () {
-        const savedTabs = await googleTabs.getSavedTabs();
-        googleTabs.updateActiveTabIcons();
-        const openTabs = await chrome.tabs.query({});
+    renderSavedTabs: async function (savedTabs, openTabs) {
+        if (!savedTabs) savedTabs = await googleTabs.getSavedTabs();
+        if (!openTabs) openTabs = await chrome.tabs.query({});
         const openTabUrls = new Set(openTabs.map(t => t.url));
 
         const filteredSavedTabs = savedTabs.filter(savedTab => !openTabUrls.has(savedTab.url));
@@ -678,8 +715,13 @@ var googleTabs = {
             dragHandle.innerHTML = ICONS.drag_handle;
 
             var innerImage = document.createElement('img');
-            innerImage.src = tab.favIconUrl || ICONS.globe;
+            innerImage.src = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
             innerImage.className = 'tab-icon';
+            innerImage.decoding = 'async';
+            innerImage.onerror = function () {
+                this.onerror = null;
+                this.src = ICONS.globe;
+            };
 
             var innerSpan = document.createElement('span');
             innerSpan.className = 'tab-title';
@@ -708,8 +750,8 @@ var googleTabs = {
         dvSavedList.appendChild(fragment);
     },
 
-    renderOfflineSavedTabs: async function () {
-        const offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
+    renderOfflineSavedTabs: async function (offlineSavedTabs, openTabs) {
+        if (!offlineSavedTabs) offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
 
         const filteredTabs = offlineSavedTabs;
 
@@ -761,8 +803,13 @@ var googleTabs = {
             dragHandle.innerHTML = ICONS.drag_handle;
 
             var innerImage = document.createElement('img');
-            innerImage.src = tab.favIconUrl || ICONS.globe;
+            innerImage.src = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
             innerImage.className = 'tab-icon';
+            innerImage.decoding = 'async';
+            innerImage.onerror = function () {
+                this.onerror = null;
+                this.src = ICONS.globe;
+            };
 
             var innerSpan = document.createElement('span');
             innerSpan.className = 'tab-title';
@@ -800,7 +847,6 @@ var googleTabs = {
         });
 
         dvOfflineList.appendChild(fragment);
-        googleTabs.updateActiveTabIcons();
     },
 
     removeOfflineSavedTab: async function (e) {
@@ -843,8 +889,10 @@ var googleTabs = {
                 let lastCleanup = result.lastHistoryCleanup || 0;
                 let oneDayMs = 24 * 60 * 60 * 1000;
                 if (now - lastCleanup >= oneDayMs) {
-                    googleTabs.deleteOldHistory(parseInt(days));
-                    chrome.storage.local.set({ lastHistoryCleanup: now });
+                    setTimeout(async function () {
+                        await googleTabs.deleteOldHistory(parseInt(days));
+                        chrome.storage.local.set({ lastHistoryCleanup: now });
+                    }, 1500);
                 }
             }
         });
@@ -869,10 +917,14 @@ var googleTabs = {
     },
 
     discardInactiveTabs: async function () {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const tabs = await chrome.tabs.query({ currentWindow: true });
-        for (const tab of tabs) {
-            if (activeTab && tab.id !== activeTab.id && !tab.discarded) {
+        const [activeTabs, tabs] = await Promise.all([
+            chrome.tabs.query({ active: true, currentWindow: true }),
+            chrome.tabs.query({ currentWindow: true })
+        ]);
+        const activeTab = activeTabs[0];
+        const discardPromises = tabs
+            .filter(tab => activeTab && tab.id !== activeTab.id && !tab.discarded)
+            .map(async tab => {
                 try {
                     const discardedTab = await chrome.tabs.discard(tab.id);
                     var el = document.getElementById(tab.id);
@@ -885,16 +937,22 @@ var googleTabs = {
                 } catch (e) {
                     console.error("Error discarding tab:", e);
                 }
-            }
-        }
+            });
+        await Promise.all(discardPromises);
     },
 
 
 
-    tabListing: async function () {
-        const tabs = await chrome.tabs.query({});
+    tabListing: async function (tabs, savedTabs, offlineSavedTabs) {
+        if (!tabs) tabs = await chrome.tabs.query({});
+        if (!savedTabs) savedTabs = await googleTabs.getSavedTabs();
+        if (!offlineSavedTabs) offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
+
         var tabList = document.getElementById('dvList');
         var fragment = document.createDocumentFragment();
+
+        const savedUrls = new Set(savedTabs.map(t => t.url));
+        const offlineSavedUrls = new Set(offlineSavedTabs.map(t => t.url));
 
         tabs.forEach(function (tab) {
             var listItem = document.createElement('div');
@@ -908,8 +966,13 @@ var googleTabs = {
             dragHandle.innerHTML = ICONS.drag_handle;
 
             var innerImage = document.createElement('img');
-            innerImage.src = tab.favIconUrl || ICONS.globe;
+            innerImage.src = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
             innerImage.className = 'tab-icon';
+            innerImage.decoding = 'async';
+            innerImage.onerror = function () {
+                this.onerror = null;
+                this.src = ICONS.globe;
+            };
 
             var innerSpan = document.createElement('span');
             innerSpan.className = 'tab-title';
@@ -930,16 +993,18 @@ var googleTabs = {
             snoozeSpan.addEventListener('click', googleTabs.tabDiscard);
 
             var saveSpan = document.createElement('span');
-            saveSpan.innerHTML = ICONS.save;
+            const isSaved = savedUrls.has(tab.url);
+            saveSpan.innerHTML = isSaved ? ICONS.unsave : ICONS.save;
             saveSpan.className = 'tab-save';
-            saveSpan.title = 'Bookmark tab';
+            saveSpan.title = isSaved ? 'Unbookmark tab' : 'Bookmark tab';
             saveSpan.setAttribute('data-url', tab.url);
             saveSpan.addEventListener('click', googleTabs.toggleSaveTab);
 
             var downloadSpan = document.createElement('span');
-            downloadSpan.innerHTML = ICONS.download;
+            const isOffline = offlineSavedUrls.has(tab.url);
+            downloadSpan.innerHTML = isOffline ? ICONS.cloud_unsave : ICONS.download;
             downloadSpan.className = 'tab-download';
-            downloadSpan.title = 'Store offline';
+            downloadSpan.title = isOffline ? 'Remove from offline saved' : 'Store offline';
             downloadSpan.setAttribute('data-url', tab.url);
             downloadSpan.addEventListener('click', googleTabs.tabDownload);
 
@@ -956,6 +1021,7 @@ var googleTabs = {
             fragment.appendChild(listItem);
         });
 
+        tabList.innerHTML = '';
         tabList.appendChild(fragment);
     },
 
@@ -1055,11 +1121,60 @@ var googleTabs = {
         });
         this.parentNode.classList.remove('discarded');
     },
+
+    init: async function () {
+        const [openTabs, storage] = await initialDataPromise;
+
+        // 1. Apply theme immediately
+        if (storage && storage.theme) {
+            document.documentElement.setAttribute('data-theme', storage.theme);
+            googleTabs.updateThemeIcon(storage.theme);
+        } else {
+            googleTabs.updateThemeIcon();
+        }
+
+        // 2. Set orderable state
+        googleTabs.isOrderable = !!(storage && storage.isOrderable);
+        googleTabs.updateOrderableUI();
+
+        // 3. Set history settings
+        let days = storage ? storage.historyRetentionDays : undefined;
+        if (days === undefined) {
+            days = "OFF";
+            chrome.storage.local.set({ historyRetentionDays: days });
+        }
+        const input = document.getElementById('historyDaysInput');
+        if (input) {
+            input.value = days;
+            input.addEventListener('change', function(e) {
+                chrome.storage.local.set({ historyRetentionDays: e.target.value });
+            });
+        }
+        if (days !== "OFF") {
+            let now = new Date().getTime();
+            let lastCleanup = (storage && storage.lastHistoryCleanup) || 0;
+            let oneDayMs = 24 * 60 * 60 * 1000;
+            if (now - lastCleanup >= oneDayMs) {
+                setTimeout(async function () {
+                    await googleTabs.deleteOldHistory(parseInt(days));
+                    chrome.storage.local.set({ lastHistoryCleanup: now });
+                }, 3000);
+            }
+        }
+
+        // 4. Render tab lists concurrently with pre-fetched data
+        const savedTabs = (storage && storage.savedTabs) || [];
+        const offlineSavedTabs = (storage && storage.offlineSavedTabs) || [];
+
+        await googleTabs.tabListing(openTabs, savedTabs, offlineSavedTabs);
+        await googleTabs.renderSavedTabs(savedTabs, openTabs);
+        await googleTabs.renderOfflineSavedTabs(offlineSavedTabs, openTabs);
+    }
 };
 
-document.addEventListener('DOMContentLoaded', function () {
-    googleTabs.initTheme();
-    googleTabs.initHistorySettings();
+function setupPopup() {
+    googleTabs.init();
+
     var discardIcon = document.getElementById("btnDiscardIcon");
     var btnDeleteHistory = document.getElementById("btnDeleteHistory");
     if (btnDeleteHistory) {
@@ -1096,10 +1211,6 @@ document.addEventListener('DOMContentLoaded', function () {
     var toggleOrderBtn = document.getElementById("btnToggleOrder");
     var settingOrderToggleBtn = document.getElementById("btnSettingOrderToggle");
 
-    googleTabs.initOrderable();
-    googleTabs.tabListing();
-    googleTabs.renderSavedTabs();
-    googleTabs.renderOfflineSavedTabs();
     if (toggleOrderBtn) {
         toggleOrderBtn.addEventListener("click", googleTabs.toggleOrderable);
     }
@@ -1151,4 +1262,10 @@ document.addEventListener('DOMContentLoaded', function () {
             googleTabs.discardInactiveTabs();
         });
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupPopup);
+} else {
+    setupPopup();
+}
