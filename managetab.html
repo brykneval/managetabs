@@ -5,6 +5,7 @@
     <title>Manage Tabs</title>
     <link rel="icon" type="image/png" href="icons/icon-16.png">
     <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <script defer src="managetab.js"></script>
     <style>
         @font-face {
             font-family: 'Inter';
@@ -43,6 +44,7 @@
 
         html {
             box-sizing: border-box;
+            background: var(--bg-color);
         }
 
         *, *:before, *:after {
@@ -57,7 +59,6 @@
 
         body {
             width: 320px;
-            min-height: 200px;
             max-height: 600px;
             margin: 0;
             padding: 8px;
@@ -153,6 +154,12 @@
         }
 
         /* Active Tab List Section */
+        #dvList,
+        #dvSavedList,
+        #dvOfflineSavedList {
+            contain: content;
+        }
+
         #dvList {
             display: flex;
             flex-direction: column;
@@ -163,6 +170,9 @@
         }
 
         .tab-item {
+            contain: layout style;
+            content-visibility: auto;
+            contain-intrinsic-size: 0 31px;
             display: flex;
             align-items: center;
             padding: 6px 8px;
@@ -262,6 +272,20 @@
             color: #3b82f6;
         }
 
+        #btnDiscardInactiveHome {
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s, transform 0.15s ease;
+        }
+
+        #btnDiscardInactiveHome:hover {
+            opacity: 1;
+        }
+
+        #btnDiscardInactiveHome:active {
+            transform: scale(0.88);
+        }
+
         .tab-drag-handle {
             width: 12px;
             height: 12px;
@@ -332,6 +356,13 @@
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="7 15 12 20 17 15"></polyline>
                         <polyline points="7 9 12 4 17 9"></polyline>
+                    </svg>
+                </span>
+                <span id="btnDiscardInactiveHome" title="Discard inactive tabs" class="tab-save">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 12h6l-6 8h6"></path>
+                        <path d="M14 4h6l-6 8h6"></path>
                     </svg>
                 </span>
                 <span id="btnOpenSettings" title="Settings" class="tab-save">
@@ -407,34 +438,14 @@
                 </span>
                 <span style="font-size: 13px;">Toggle Theme</span>
             </div>
-            <div class="setting-item" id="btnSettingOrderToggle">
+            <div class="setting-item" id="btnToggleSavedTabsSetting">
                 <span class="tab-save" style="opacity: 1; margin: 0;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    <svg id="iconToggleSavedTabsSetting" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="7 15 12 20 17 15"></polyline>
-                        <polyline points="7 9 12 4 17 9"></polyline>
+                        <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </span>
-                <span style="font-size: 13px;" id="lblSettingOrderToggle">Enable Row Reordering</span>
-            </div>
-            <div class="setting-item" id="btnSaveAllIcon">
-                <span class="tab-save" style="opacity: 1; margin: 0;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                </span>
-                <span style="font-size: 13px;">Bookmark All Tabs</span>
-            </div>
-            <div class="setting-item" id="btnDiscardIcon">
-                <span class="tab-save" style="opacity: 1; margin: 0;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 12h6l-6 8h6"></path>
-                        <path d="M14 4h6l-6 8h6"></path>
-                    </svg>
-                </span>
-                <span style="font-size: 13px;">Discard Inactive Tabs</span>
+                <span style="font-size: 13px;" id="lblToggleSavedTabsSetting">Expand Bookmarked Tabs</span>
             </div>
             <div class="setting-item" id="btnImportIcon">
                 <span class="tab-save" style="opacity: 1; margin: 0;">
@@ -485,27 +496,6 @@
                 </span>
                 <span style="font-size: 13px; color: #ef4444;">Delete old history now</span>
             </div>
-            <div class="setting-item" id="btnRestoreAllIcon" style="display: none;">
-                <span class="tab-save" style="opacity: 1; margin: 0;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                        <polyline points="15 3 21 3 21 9"></polyline>
-                        <line x1="10" y1="14" x2="21" y2="3"></line>
-                    </svg>
-                </span>
-                <span style="font-size: 13px;">Restore All Bookmarked Tabs</span>
-            </div>
-            <div class="setting-item" id="btnClearAllSavedIcon" style="display: none;">
-                <span class="tab-save" style="opacity: 1; margin: 0; color: #ef4444;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                </span>
-                <span style="font-size: 13px; color: #ef4444;">Clear All Bookmarked Tabs</span>
-            </div>
             <div class="setting-item" id="btnClearAllOfflineSavedIcon" style="display: none;">
                 <span class="tab-save" style="opacity: 1; margin: 0; color: #ef4444;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -519,7 +509,6 @@
         </div>
     </div>
     <input type="file" id="fileImport" accept=".json" style="display: none;" />
-    <script src="managetab.js"></script>
 </body>
 
 </html>

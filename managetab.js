@@ -1,3 +1,26 @@
+// Synchronously apply cached theme from localStorage to prevent FOUC
+(function() {
+    try {
+        const theme = localStorage.getItem('theme');
+        if (theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+        }
+        localStorage.removeItem('lastPopupHeight');
+    } catch (e) {}
+})();
+
+const FAVICON_BASE = chrome.runtime.getURL("/_favicon/?size=32&pageUrl=");
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 const ICONS = {
     download: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 17l4 4 4-4"></path><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path></svg>',
     save: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>',
@@ -6,8 +29,17 @@ const ICONS = {
     snooze: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h6l-6 8h6"></path><path d="M14 4h6l-6 8h6"></path></svg>',
     close: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
     drag_handle: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>',
-    globe: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>'
+    globe: 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%239ca3af%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%2210%22%3E%3C%2Fcircle%3E%3Cline%20x1%3D%222%22%20y1%3D%2212%22%20x2%3D%2222%22%20y2%3D%2212%22%3E%3C%2Fline%3E%3Cpath%20d%3D%22M12%202a15.3%2015.3%200%200%201%204%2010%2015.3%2015.3%200%200%201-4%2010%2015.3%2015.3%200%200%201-4-10%2015.3%2015.3%200%200%201%204-10z%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E'
 };
+
+// Fallback for broken tab icons (capture phase handles non-bubbling error events on images)
+document.addEventListener('error', function (e) {
+    if (e.target && e.target.tagName === 'IMG' && e.target.classList && e.target.classList.contains('tab-icon')) {
+        if (e.target.src !== ICONS.globe) {
+            e.target.src = ICONS.globe;
+        }
+    }
+}, true);
 
 // Start pre-fetching tabs and all storage data immediately at the earliest possible instant
 const initialDataPromise = Promise.all([
@@ -15,6 +47,8 @@ const initialDataPromise = Promise.all([
     chrome.storage.local.get([
         'theme',
         'isOrderable',
+        'isSavedTabsCollapsed',
+        'isOfflineSavedTabsCollapsed',
         'historyRetentionDays',
         'lastHistoryCleanup',
         'savedTabs',
@@ -23,110 +57,167 @@ const initialDataPromise = Promise.all([
 ]);
 
 var googleTabs = {
-    isSavedTabsCollapsed: true,
-    isOfflineSavedTabsCollapsed: true,
-    isOrderable: false,
+    isSavedTabsCollapsed: (function() {
+        try {
+            const v = localStorage.getItem('isSavedTabsCollapsed');
+            return v !== null ? v === '1' : true;
+        } catch(e) { return true; }
+    })(),
+    isOfflineSavedTabsCollapsed: (function() {
+        try {
+            const v = localStorage.getItem('isOfflineSavedTabsCollapsed');
+            return v !== null ? v === '1' : true;
+        } catch(e) { return true; }
+    })(),
+    isOrderable: (function() {
+        try {
+            return localStorage.getItem('isOrderable') === '1';
+        } catch(e) { return false; }
+    })(),
     dragSourceItem: null,
     dragSourceContainer: null,
+    _cachedSavedTabs: null,
+    _cachedOfflineSavedTabs: null,
+    cachedFilteredSavedTabs: null,
+    cachedOfflineSavedTabs: null,
 
     getFaviconUrl: function (url, fallbackFavIconUrl) {
         if (fallbackFavIconUrl && fallbackFavIconUrl.startsWith('data:image/')) {
             return fallbackFavIconUrl;
         }
         if (url) {
-            try {
-                // Use Chrome's local favicon cache to prevent external network requests (avoids ERR_CONNECTION_REFUSED)
-                const faviconUrl = new URL(chrome.runtime.getURL("/_favicon/"));
-                faviconUrl.searchParams.set("pageUrl", url);
-                faviconUrl.searchParams.set("size", "32");
-                return faviconUrl.toString();
-            } catch (e) {
-                // Ignore URL parsing errors
-            }
+            return FAVICON_BASE + encodeURIComponent(url);
         }
         return fallbackFavIconUrl || ICONS.globe;
     },
 
     toggleSavedTabs: function () {
-        if (!document.getElementById('collapseIcon') || document.getElementById('collapseIcon').style.display === 'none') {
-            return;
+        googleTabs.isSavedTabsCollapsed = !googleTabs.isSavedTabsCollapsed;
+        try {
+            localStorage.setItem('isSavedTabsCollapsed', googleTabs.isSavedTabsCollapsed ? '1' : '0');
+        } catch (e) {}
+        chrome.storage.local.set({ isSavedTabsCollapsed: googleTabs.isSavedTabsCollapsed });
+        googleTabs.updateSavedTabsCollapseUI();
+
+        if (!googleTabs.isSavedTabsCollapsed) {
+            const dvSavedList = document.getElementById('dvSavedList');
+            if (dvSavedList && dvSavedList.dataset.rendered !== "true" && googleTabs.cachedFilteredSavedTabs) {
+                googleTabs.renderSavedTabRows(googleTabs.cachedFilteredSavedTabs);
+            }
         }
+    },
+
+    updateSavedTabsCollapseUI: function () {
         const dvSavedList = document.getElementById('dvSavedList');
         const collapseIcon = document.getElementById('collapseIcon');
         const savedGroup = document.getElementById('savedTabsGroup');
+        const lblSetting = document.getElementById('lblToggleSavedTabsSetting');
+        const iconSetting = document.getElementById('iconToggleSavedTabsSetting');
 
-        googleTabs.isSavedTabsCollapsed = !googleTabs.isSavedTabsCollapsed;
+        if (lblSetting) {
+            lblSetting.textContent = googleTabs.isSavedTabsCollapsed ? 'Expand Bookmarked Tabs' : 'Collapse Bookmarked Tabs';
+        }
+        if (iconSetting) {
+            iconSetting.innerHTML = googleTabs.isSavedTabsCollapsed
+                ? '<polyline points="9 18 15 12 9 6"></polyline>'
+                : '<polyline points="6 9 12 15 18 9"></polyline>';
+        }
 
-        if (googleTabs.isSavedTabsCollapsed) {
-            dvSavedList.style.display = 'none';
-            savedGroup.style.borderBottom = 'none';
-            savedGroup.style.paddingBottom = '0';
-            savedGroup.style.marginBottom = '0';
-            collapseIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
-        } else {
-            dvSavedList.style.display = 'flex';
-            savedGroup.style.borderBottom = '1px solid var(--border-color)';
-            savedGroup.style.paddingBottom = '8px';
-            savedGroup.style.marginBottom = '8px';
-            collapseIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+        if (dvSavedList && savedGroup) {
+            if (googleTabs.isSavedTabsCollapsed) {
+                dvSavedList.style.display = 'none';
+                savedGroup.style.borderBottom = 'none';
+                savedGroup.style.paddingBottom = '0';
+                savedGroup.style.marginBottom = '0';
+                if (collapseIcon) {
+                    collapseIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+                }
+            } else {
+                dvSavedList.style.display = 'flex';
+                savedGroup.style.borderBottom = '1px solid var(--border-color)';
+                savedGroup.style.paddingBottom = '8px';
+                savedGroup.style.marginBottom = '8px';
+                if (collapseIcon) {
+                    collapseIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+                }
+            }
         }
     },
 
     toggleOfflineSavedTabs: function () {
+        googleTabs.isOfflineSavedTabsCollapsed = !googleTabs.isOfflineSavedTabsCollapsed;
+        try {
+            localStorage.setItem('isOfflineSavedTabsCollapsed', googleTabs.isOfflineSavedTabsCollapsed ? '1' : '0');
+        } catch (e) {}
+        chrome.storage.local.set({ isOfflineSavedTabsCollapsed: googleTabs.isOfflineSavedTabsCollapsed });
+        googleTabs.updateOfflineSavedTabsCollapseUI();
+
+        if (!googleTabs.isOfflineSavedTabsCollapsed) {
+            const dvOfflineList = document.getElementById('dvOfflineSavedList');
+            if (dvOfflineList && dvOfflineList.dataset.rendered !== "true" && googleTabs.cachedOfflineSavedTabs) {
+                googleTabs.renderOfflineSavedTabRows(googleTabs.cachedOfflineSavedTabs);
+            }
+        }
+    },
+
+    updateOfflineSavedTabsCollapseUI: function () {
         const dvOfflineSavedList = document.getElementById('dvOfflineSavedList');
         const collapseIconOffline = document.getElementById('collapseIconOffline');
         const offlineSavedTabsGroup = document.getElementById('offlineSavedTabsGroup');
 
-        googleTabs.isOfflineSavedTabsCollapsed = !googleTabs.isOfflineSavedTabsCollapsed;
-
-        if (googleTabs.isOfflineSavedTabsCollapsed) {
-            dvOfflineSavedList.style.display = 'none';
-            offlineSavedTabsGroup.style.borderBottom = '1px solid var(--border-color)';
-            offlineSavedTabsGroup.style.paddingBottom = '8px';
-            offlineSavedTabsGroup.style.marginBottom = '8px';
-            if (collapseIconOffline) collapseIconOffline.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
-        } else {
-            dvOfflineSavedList.style.display = 'flex';
-            offlineSavedTabsGroup.style.borderBottom = '1px solid var(--border-color)';
-            offlineSavedTabsGroup.style.paddingBottom = '8px';
-            offlineSavedTabsGroup.style.marginBottom = '8px';
-            if (collapseIconOffline) collapseIconOffline.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+        if (dvOfflineSavedList && offlineSavedTabsGroup) {
+            if (googleTabs.isOfflineSavedTabsCollapsed) {
+                dvOfflineSavedList.style.display = 'none';
+                offlineSavedTabsGroup.style.borderBottom = '1px solid var(--border-color)';
+                offlineSavedTabsGroup.style.paddingBottom = '8px';
+                offlineSavedTabsGroup.style.marginBottom = '8px';
+                if (collapseIconOffline) {
+                    collapseIconOffline.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+                }
+            } else {
+                dvOfflineSavedList.style.display = 'flex';
+                offlineSavedTabsGroup.style.borderBottom = '1px solid var(--border-color)';
+                offlineSavedTabsGroup.style.paddingBottom = '8px';
+                offlineSavedTabsGroup.style.marginBottom = '8px';
+                if (collapseIconOffline) {
+                    collapseIconOffline.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+                }
+            }
         }
     },
 
     initOrderable: function () {
         chrome.storage.local.get(['isOrderable'], function (result) {
             googleTabs.isOrderable = !!result.isOrderable;
+            try {
+                localStorage.setItem('isOrderable', googleTabs.isOrderable ? '1' : '0');
+            } catch (e) {}
             googleTabs.updateOrderableUI();
         });
     },
 
     toggleOrderable: function () {
         googleTabs.isOrderable = !googleTabs.isOrderable;
+        try {
+            localStorage.setItem('isOrderable', googleTabs.isOrderable ? '1' : '0');
+        } catch (e) {}
         chrome.storage.local.set({ isOrderable: googleTabs.isOrderable });
         googleTabs.updateOrderableUI();
     },
 
     updateOrderableUI: function () {
         const btnToggle = document.getElementById('btnToggleOrder');
-        const lblSetting = document.getElementById('lblSettingOrderToggle');
         if (googleTabs.isOrderable) {
             document.body.classList.add('orderable-mode');
             if (btnToggle) {
                 btnToggle.classList.add('active');
                 btnToggle.title = 'Disable row reordering (Reorder ON)';
             }
-            if (lblSetting) {
-                lblSetting.textContent = 'Disable Row Reordering';
-            }
         } else {
             document.body.classList.remove('orderable-mode');
             if (btnToggle) {
                 btnToggle.classList.remove('active');
                 btnToggle.title = 'Enable row reordering (Reorder OFF)';
-            }
-            if (lblSetting) {
-                lblSetting.textContent = 'Enable Row Reordering';
             }
         }
 
@@ -136,67 +227,76 @@ var googleTabs = {
     },
 
     makeRowOrderable: function (listItem) {
-        listItem.setAttribute('draggable', googleTabs.isOrderable ? 'true' : 'false');
+        if (listItem) {
+            listItem.setAttribute('draggable', googleTabs.isOrderable ? 'true' : 'false');
+        }
+    },
 
-        listItem.addEventListener('dragstart', function (e) {
+    initContainerDragAndDrop: function (container) {
+        if (!container) return;
+        container.addEventListener('dragstart', function (e) {
             if (!googleTabs.isOrderable) {
                 e.preventDefault();
                 return;
             }
-            if (e.target.closest('.tab-close, .tab-snooze, .tab-save, .tab-download')) {
+            const item = e.target.closest('.tab-item');
+            if (!item || e.target.closest('.tab-close, .tab-snooze, .tab-save, .tab-download')) {
                 e.preventDefault();
                 return;
             }
-            googleTabs.dragSourceItem = this;
-            googleTabs.dragSourceContainer = this.parentNode;
+            googleTabs.dragSourceItem = item;
+            googleTabs.dragSourceContainer = container;
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', this.id || this.getAttribute('data-url') || '');
-            this.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', item.id || item.getAttribute('data-url') || '');
+            item.classList.add('dragging');
         });
 
-        listItem.addEventListener('dragover', function (e) {
+        container.addEventListener('dragover', function (e) {
             if (!googleTabs.isOrderable || !googleTabs.dragSourceItem) return;
-            if (this.parentNode !== googleTabs.dragSourceContainer) return;
-            if (this === googleTabs.dragSourceItem) return;
+            if (container !== googleTabs.dragSourceContainer) return;
+            const targetItem = e.target.closest('.tab-item');
+            if (!targetItem || targetItem === googleTabs.dragSourceItem) return;
 
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
 
-            const rect = this.getBoundingClientRect();
+            const rect = targetItem.getBoundingClientRect();
             const midY = rect.top + rect.height / 2;
             if (e.clientY < midY) {
-                this.classList.add('drag-over-top');
-                this.classList.remove('drag-over-bottom');
+                targetItem.classList.add('drag-over-top');
+                targetItem.classList.remove('drag-over-bottom');
             } else {
-                this.classList.add('drag-over-bottom');
-                this.classList.remove('drag-over-top');
+                targetItem.classList.add('drag-over-bottom');
+                targetItem.classList.remove('drag-over-top');
             }
         });
 
-        listItem.addEventListener('dragleave', function () {
-            this.classList.remove('drag-over-top');
-            this.classList.remove('drag-over-bottom');
+        container.addEventListener('dragleave', function (e) {
+            const targetItem = e.target.closest('.tab-item');
+            if (targetItem && !targetItem.contains(e.relatedTarget)) {
+                targetItem.classList.remove('drag-over-top');
+                targetItem.classList.remove('drag-over-bottom');
+            }
         });
 
-        listItem.addEventListener('drop', async function (e) {
+        container.addEventListener('drop', async function (e) {
             if (!googleTabs.isOrderable || !googleTabs.dragSourceItem) return;
-            if (this.parentNode !== googleTabs.dragSourceContainer) return;
-            if (this === googleTabs.dragSourceItem) return;
+            if (container !== googleTabs.dragSourceContainer) return;
+            const targetItem = e.target.closest('.tab-item');
+            if (!targetItem || targetItem === googleTabs.dragSourceItem) return;
 
             e.preventDefault();
             e.stopPropagation();
 
-            const isAbove = this.classList.contains('drag-over-top');
-            this.classList.remove('drag-over-top');
-            this.classList.remove('drag-over-bottom');
+            const isAbove = targetItem.classList.contains('drag-over-top');
+            targetItem.classList.remove('drag-over-top');
+            targetItem.classList.remove('drag-over-bottom');
 
-            const container = this.parentNode;
             const source = googleTabs.dragSourceItem;
-
             if (isAbove) {
-                container.insertBefore(source, this);
+                container.insertBefore(source, targetItem);
             } else {
-                container.insertBefore(source, this.nextSibling);
+                container.insertBefore(source, targetItem.nextSibling);
             }
 
             if (container.id === 'dvList') {
@@ -208,11 +308,11 @@ var googleTabs = {
             }
         });
 
-        listItem.addEventListener('dragend', function () {
+        container.addEventListener('dragend', function () {
             if (googleTabs.dragSourceItem) {
                 googleTabs.dragSourceItem.classList.remove('dragging');
             }
-            document.querySelectorAll('.tab-item').forEach(el => {
+            container.querySelectorAll('.tab-item').forEach(el => {
                 el.classList.remove('drag-over-top');
                 el.classList.remove('drag-over-bottom');
             });
@@ -344,70 +444,35 @@ var googleTabs = {
         }
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', newTheme);
+        try {
+            localStorage.setItem('theme', newTheme);
+        } catch (e) {}
         chrome.storage.local.set({ theme: newTheme });
         googleTabs.updateThemeIcon(newTheme);
     },
+
     getSavedTabs: async function () {
+        if (googleTabs._cachedSavedTabs) return googleTabs._cachedSavedTabs;
         const result = await chrome.storage.local.get(['savedTabs']);
-        return result.savedTabs || [];
+        googleTabs._cachedSavedTabs = result.savedTabs || [];
+        return googleTabs._cachedSavedTabs;
     },
 
     setSavedTabs: async function (tabs) {
+        googleTabs._cachedSavedTabs = tabs;
         await chrome.storage.local.set({ savedTabs: tabs });
     },
 
     getOfflineSavedTabs: async function () {
+        if (googleTabs._cachedOfflineSavedTabs) return googleTabs._cachedOfflineSavedTabs;
         const result = await chrome.storage.local.get(['offlineSavedTabs']);
-        return result.offlineSavedTabs || [];
+        googleTabs._cachedOfflineSavedTabs = result.offlineSavedTabs || [];
+        return googleTabs._cachedOfflineSavedTabs;
     },
 
     setOfflineSavedTabs: async function (tabs) {
+        googleTabs._cachedOfflineSavedTabs = tabs;
         await chrome.storage.local.set({ offlineSavedTabs: tabs });
-    },
-
-    saveAllTabs: async function () {
-        const tabs = await chrome.tabs.query({ currentWindow: true });
-        let savedTabs = await googleTabs.getSavedTabs();
-
-        const savedUrls = new Set(savedTabs.map(t => t.url));
-        const allSaved = tabs.every(tab => savedUrls.has(tab.url));
-
-        if (allSaved) {
-            const openTabUrls = new Set(tabs.map(t => t.url));
-            savedTabs = savedTabs.filter(savedTab => !openTabUrls.has(savedTab.url));
-        } else {
-            tabs.forEach(tab => {
-                if (!savedUrls.has(tab.url)) {
-                    savedTabs.push({ url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
-                    savedUrls.add(tab.url);
-                }
-            });
-        }
-
-        await googleTabs.setSavedTabs(savedTabs);
-        await googleTabs.updateActiveTabIcons();
-        googleTabs.renderSavedTabs();
-    },
-
-    restoreAllTabs: async function () {
-        const savedTabs = await googleTabs.getSavedTabs();
-        const openTabs = await chrome.tabs.query({});
-        const openTabUrls = new Set(openTabs.map(t => t.url));
-        
-        savedTabs.forEach(tab => {
-            if (!openTabUrls.has(tab.url)) {
-                chrome.tabs.create({ url: tab.url });
-            }
-        });
-    },
-
-    clearAllSavedTabs: async function () {
-        const confirmed = window.confirm("Are you sure you want to clear all bookmarked tabs? This action cannot be undone.");
-        if (confirmed) {
-            await googleTabs.setSavedTabs([]);
-            await googleTabs.updateActiveTabIcons();
-            googleTabs.renderSavedTabs();
-        }
     },
 
     clearAllOfflineSavedTabs: async function () {
@@ -435,7 +500,7 @@ var googleTabs = {
         const [savedTabs, offlineSavedTabs, result] = await Promise.all([
             googleTabs.getSavedTabs(),
             googleTabs.getOfflineSavedTabs(),
-            chrome.storage.local.get(['theme', 'historyRetentionDays', 'isOrderable'])
+            chrome.storage.local.get(['theme', 'historyRetentionDays', 'isOrderable', 'isSavedTabsCollapsed', 'isOfflineSavedTabsCollapsed'])
         ]);
 
         const exportedSaved = savedTabs.map((tab, idx) => ({ ...tab, order: idx }));
@@ -447,7 +512,9 @@ var googleTabs = {
             settings: {
                 theme: result.theme,
                 historyRetentionDays: result.historyRetentionDays,
-                isOrderable: result.isOrderable || false
+                isOrderable: result.isOrderable || false,
+                isSavedTabsCollapsed: result.isSavedTabsCollapsed !== undefined ? result.isSavedTabsCollapsed : true,
+                isOfflineSavedTabsCollapsed: result.isOfflineSavedTabsCollapsed !== undefined ? result.isOfflineSavedTabsCollapsed : true
             }
         };
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
@@ -500,6 +567,16 @@ var googleTabs = {
                             googleTabs.isOrderable = newSettings.isOrderable;
                             googleTabs.updateOrderableUI();
                         }
+                        if (importedData.settings.isSavedTabsCollapsed !== undefined) {
+                            newSettings.isSavedTabsCollapsed = importedData.settings.isSavedTabsCollapsed;
+                            googleTabs.isSavedTabsCollapsed = importedData.settings.isSavedTabsCollapsed;
+                            googleTabs.updateSavedTabsCollapseUI();
+                        }
+                        if (importedData.settings.isOfflineSavedTabsCollapsed !== undefined) {
+                            newSettings.isOfflineSavedTabsCollapsed = importedData.settings.isOfflineSavedTabsCollapsed;
+                            googleTabs.isOfflineSavedTabsCollapsed = importedData.settings.isOfflineSavedTabsCollapsed;
+                            googleTabs.updateOfflineSavedTabsCollapseUI();
+                        }
                         if (Object.keys(newSettings).length > 0) {
                             await chrome.storage.local.set(newSettings);
                         }
@@ -549,26 +626,51 @@ var googleTabs = {
         reader.readAsText(file);
     },
 
-    toggleSaveTab: async function (e) {
-        e.stopPropagation();
-        const tabItem = this.parentNode;
-        const tabId = parseInt(tabItem.id);
+    toggleSaveTab: async function (item, saveBtn) {
+        let el = item;
+        let btn = saveBtn;
+        if (item && item.target) {
+            item.stopPropagation();
+            el = item.currentTarget ? item.currentTarget.parentNode : this.parentNode;
+            btn = item.currentTarget || this;
+        } else if (!el) {
+            el = this && this.parentNode;
+            btn = this;
+        }
+        if (!el) return;
+        const tabId = parseInt(el.id);
+        if (isNaN(tabId)) return;
         const tab = await chrome.tabs.get(tabId);
         let savedTabs = await googleTabs.getSavedTabs();
 
         if (savedTabs.find(t => t.url === tab.url)) {
             savedTabs = savedTabs.filter(t => t.url !== tab.url);
+            if (btn) {
+                btn.innerHTML = ICONS.save;
+                btn.title = 'Bookmark tab';
+            }
         } else {
             savedTabs.push({ url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
+            if (btn) {
+                btn.innerHTML = ICONS.unsave;
+                btn.title = 'Unbookmark tab';
+            }
         }
         await googleTabs.setSavedTabs(savedTabs);
         await googleTabs.updateActiveTabIcons();
         googleTabs.renderSavedTabs();
     },
 
-    unsaveTab: async function (e) {
-        e.stopPropagation();
-        const url = this.getAttribute('data-url');
+    unsaveTab: async function (item) {
+        let el = item;
+        if (item && item.target) {
+            item.stopPropagation();
+            el = item.currentTarget || this;
+        } else if (!el) {
+            el = this;
+        }
+        const url = el.getAttribute('data-url') || (el.parentNode && el.parentNode.getAttribute('data-url'));
+        if (!url) return;
         let savedTabs = await googleTabs.getSavedTabs();
         savedTabs = savedTabs.filter(t => t.url !== url);
         await googleTabs.setSavedTabs(savedTabs);
@@ -576,14 +678,29 @@ var googleTabs = {
         googleTabs.renderSavedTabs();
     },
 
-    openSavedTab: function () {
-        const url = this.getAttribute('data-url');
-        chrome.tabs.create({ url: url });
+    openSavedTab: function (item) {
+        let el = item;
+        if (item && item.target) {
+            el = item.currentTarget || this;
+        } else if (!el) {
+            el = this;
+        }
+        const url = el.getAttribute('data-url') || (el.querySelector && el.querySelector('.tab-title') && el.querySelector('.tab-title').getAttribute('data-url'));
+        if (url) {
+            chrome.tabs.create({ url: url });
+        }
     },
 
-    openOfflineSavedTab: function () {
-        const url = this.getAttribute('data-url');
-        const downloadId = this.getAttribute('data-download-id');
+    openOfflineSavedTab: function (item) {
+        let el = item;
+        if (item && item.target) {
+            el = item.currentTarget || this;
+        } else if (!el) {
+            el = this;
+        }
+        const titleSpan = el.classList && el.classList.contains('tab-title') ? el : (el.querySelector ? el.querySelector('.tab-title') : null);
+        const url = el.getAttribute('data-url') || (titleSpan && titleSpan.getAttribute('data-url'));
+        const downloadId = (titleSpan && titleSpan.getAttribute('data-download-id')) || el.getAttribute('data-download-id');
         if (downloadId && downloadId !== 'undefined') {
             chrome.downloads.search({ id: parseInt(downloadId) }, (results) => {
                 if (results && results.length > 0 && results[0].state === 'complete') {
@@ -598,7 +715,7 @@ var googleTabs = {
                     chrome.tabs.create({ url: url });
                 }
             });
-        } else {
+        } else if (url) {
             chrome.tabs.create({ url: url });
         }
     },
@@ -648,120 +765,82 @@ var googleTabs = {
         const openTabUrls = new Set(openTabs.map(t => t.url));
 
         const filteredSavedTabs = savedTabs.filter(savedTab => !openTabUrls.has(savedTab.url));
+        googleTabs.cachedFilteredSavedTabs = filteredSavedTabs;
 
         const savedGroup = document.getElementById('savedTabsGroup');
         const dvSavedList = document.getElementById('dvSavedList');
         const mainLabel = document.getElementById('mainLabel');
         const collapseIcon = document.getElementById('collapseIcon');
         const titleGroup = document.getElementById('titleGroup');
-        const btnRestoreAllIcon = document.getElementById('btnRestoreAllIcon');
-        const btnClearAllSavedIcon = document.getElementById('btnClearAllSavedIcon');
         const btnExportIcon = document.getElementById('btnExportIcon');
-        dvSavedList.innerHTML = '';
 
         if (savedTabs.length === 0) {
             if (mainLabel) mainLabel.textContent = 'Tabs';
-            if (btnRestoreAllIcon) btnRestoreAllIcon.style.display = 'none';
-            if (btnClearAllSavedIcon) btnClearAllSavedIcon.style.display = 'none';
             if (btnExportIcon) btnExportIcon.style.display = 'none';
         } else {
             if (mainLabel) mainLabel.textContent = 'Bookmarked Tabs';
-            if (btnRestoreAllIcon) btnRestoreAllIcon.style.display = 'flex';
-            if (btnClearAllSavedIcon) btnClearAllSavedIcon.style.display = 'flex';
             if (btnExportIcon) btnExportIcon.style.display = 'flex';
         }
 
         if (filteredSavedTabs.length === 0) {
-            savedGroup.style.display = 'none';
+            if (savedGroup) savedGroup.style.display = 'none';
             if (collapseIcon) collapseIcon.style.display = 'none';
             if (titleGroup) {
                 titleGroup.style.cursor = 'default';
                 titleGroup.title = '';
             }
+            if (dvSavedList) dvSavedList.innerHTML = '';
             return;
         }
 
-        savedGroup.style.display = 'block';
+        if (savedGroup) savedGroup.style.display = 'block';
         if (collapseIcon) collapseIcon.style.display = 'flex';
         if (titleGroup) {
             titleGroup.style.cursor = 'pointer';
             titleGroup.title = 'Toggle Bookmarked Tabs';
         }
 
+        googleTabs.updateSavedTabsCollapseUI();
+
         if (googleTabs.isSavedTabsCollapsed) {
-            dvSavedList.style.display = 'none';
-            savedGroup.style.borderBottom = 'none';
-            savedGroup.style.paddingBottom = '0';
-            savedGroup.style.marginBottom = '0';
-            if (collapseIcon) collapseIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
-        } else {
-            dvSavedList.style.display = 'flex';
-            savedGroup.style.borderBottom = '1px solid var(--border-color)';
-            savedGroup.style.paddingBottom = '8px';
-            savedGroup.style.marginBottom = '8px';
-            if (collapseIcon) collapseIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+            if (dvSavedList) dvSavedList.dataset.rendered = "false";
+            return;
         }
 
-        var fragment = document.createDocumentFragment();
+        googleTabs.renderSavedTabRows(filteredSavedTabs);
+    },
 
-        filteredSavedTabs.forEach(function (tab) {
-            var listItem = document.createElement('div');
-            listItem.className = 'tab-item discarded';
-            listItem.setAttribute('data-url', tab.url);
+    renderSavedTabRows: function (filteredSavedTabs) {
+        const dvSavedList = document.getElementById('dvSavedList');
+        if (!dvSavedList) return;
+        const isOrderable = googleTabs.isOrderable;
 
-            var dragHandle = document.createElement('span');
-            dragHandle.className = 'tab-drag-handle';
-            dragHandle.title = 'Drag to reorder';
-            dragHandle.innerHTML = ICONS.drag_handle;
+        let html = '';
+        for (let i = 0; i < filteredSavedTabs.length; i++) {
+            const tab = filteredSavedTabs[i];
+            const favicon = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
+            const titleEsc = escapeHtml(tab.title || 'Untitled');
+            const urlEsc = escapeHtml(tab.url || '');
 
-            var innerImage = document.createElement('img');
-            innerImage.src = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
-            innerImage.className = 'tab-icon';
-            innerImage.decoding = 'async';
-            innerImage.onerror = function () {
-                this.onerror = null;
-                this.src = ICONS.globe;
-            };
-
-            var innerSpan = document.createElement('span');
-            innerSpan.className = 'tab-title';
-            innerSpan.textContent = tab.title;
-            innerSpan.title = tab.title;
-            innerSpan.setAttribute('data-url', tab.url);
-            innerSpan.addEventListener("click", googleTabs.openSavedTab);
-
-            var saveSpan = document.createElement('span');
-            saveSpan.innerHTML = ICONS.unsave;
-            saveSpan.className = 'tab-save';
-            saveSpan.title = 'Unbookmark tab';
-            saveSpan.setAttribute('data-url', tab.url);
-            saveSpan.addEventListener('click', googleTabs.unsaveTab);
-
-            listItem.appendChild(dragHandle);
-            listItem.appendChild(innerImage);
-            listItem.appendChild(innerSpan);
-            listItem.appendChild(saveSpan);
-
-            googleTabs.makeRowOrderable(listItem);
-
-            fragment.appendChild(listItem);
-        });
-
-        dvSavedList.appendChild(fragment);
+            html += `<div class="tab-item discarded" data-url="${urlEsc}" draggable="${isOrderable}">`
+                + `<span class="tab-drag-handle" title="Drag to reorder">${ICONS.drag_handle}</span>`
+                + `<img src="${favicon}" class="tab-icon" decoding="async" loading="lazy">`
+                + `<span class="tab-title" title="${titleEsc}" data-url="${urlEsc}">${titleEsc}</span>`
+                + `<span class="tab-save" title="Unbookmark tab" data-url="${urlEsc}">${ICONS.unsave}</span>`
+                + `</div>`;
+        }
+        dvSavedList.innerHTML = html;
+        dvSavedList.dataset.rendered = "true";
     },
 
     renderOfflineSavedTabs: async function (offlineSavedTabs, openTabs) {
         if (!offlineSavedTabs) offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
-
         const filteredTabs = offlineSavedTabs;
+        googleTabs.cachedOfflineSavedTabs = filteredTabs;
 
         const offlineGroup = document.getElementById('offlineSavedTabsGroup');
         const dvOfflineList = document.getElementById('dvOfflineSavedList');
         const btnClearAllOffline = document.getElementById('btnClearAllOfflineSavedIcon');
-        const titleGroupOffline = document.getElementById('titleGroupOffline');
-        const collapseIconOffline = document.getElementById('collapseIconOffline');
-
-        dvOfflineList.innerHTML = '';
 
         if (offlineSavedTabs.length === 0) {
             if (btnClearAllOffline) btnClearAllOffline.style.display = 'none';
@@ -770,88 +849,58 @@ var googleTabs = {
         }
 
         if (filteredTabs.length === 0) {
-            offlineGroup.style.display = 'none';
+            if (offlineGroup) offlineGroup.style.display = 'none';
+            if (dvOfflineList) dvOfflineList.innerHTML = '';
             return;
         }
 
-        offlineGroup.style.display = 'block';
+        if (offlineGroup) offlineGroup.style.display = 'block';
+        googleTabs.updateOfflineSavedTabsCollapseUI();
 
         if (googleTabs.isOfflineSavedTabsCollapsed) {
-            dvOfflineList.style.display = 'none';
-            offlineGroup.style.borderBottom = '1px solid var(--border-color)';
-            offlineGroup.style.paddingBottom = '8px';
-            offlineGroup.style.marginBottom = '8px';
-            if (collapseIconOffline) collapseIconOffline.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
-        } else {
-            dvOfflineList.style.display = 'flex';
-            offlineGroup.style.borderBottom = '1px solid var(--border-color)';
-            offlineGroup.style.paddingBottom = '8px';
-            offlineGroup.style.marginBottom = '8px';
-            if (collapseIconOffline) collapseIconOffline.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+            if (dvOfflineList) dvOfflineList.dataset.rendered = "false";
+            return;
         }
 
-        var fragment = document.createDocumentFragment();
-
-        filteredTabs.forEach(function (tab) {
-            var listItem = document.createElement('div');
-            listItem.className = 'tab-item discarded';
-            listItem.setAttribute('data-url', tab.url);
-
-            var dragHandle = document.createElement('span');
-            dragHandle.className = 'tab-drag-handle';
-            dragHandle.title = 'Drag to reorder';
-            dragHandle.innerHTML = ICONS.drag_handle;
-
-            var innerImage = document.createElement('img');
-            innerImage.src = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
-            innerImage.className = 'tab-icon';
-            innerImage.decoding = 'async';
-            innerImage.onerror = function () {
-                this.onerror = null;
-                this.src = ICONS.globe;
-            };
-
-            var innerSpan = document.createElement('span');
-            innerSpan.className = 'tab-title';
-            innerSpan.textContent = tab.title;
-            innerSpan.title = tab.title;
-            innerSpan.setAttribute('data-url', tab.url);
-            if (tab.downloadId) innerSpan.setAttribute('data-download-id', tab.downloadId);
-            innerSpan.addEventListener("click", googleTabs.openOfflineSavedTab);
-
-            var sizeSpan = document.createElement('span');
-            sizeSpan.className = 'tab-size';
-            sizeSpan.style.fontSize = '10px';
-            sizeSpan.style.color = 'var(--icon-color)';
-            sizeSpan.style.marginLeft = '8px';
-            sizeSpan.style.marginRight = '8px';
-            sizeSpan.style.opacity = '0.7';
-            sizeSpan.textContent = tab.size ? tab.size : '';
-
-            var removeSpan = document.createElement('span');
-            removeSpan.innerHTML = ICONS.cloud_unsave;
-            removeSpan.className = 'tab-save';
-            removeSpan.title = 'Remove from offline saved';
-            removeSpan.setAttribute('data-url', tab.url);
-            removeSpan.addEventListener('click', googleTabs.removeOfflineSavedTab);
-
-            listItem.appendChild(dragHandle);
-            listItem.appendChild(innerImage);
-            listItem.appendChild(innerSpan);
-            listItem.appendChild(sizeSpan);
-            listItem.appendChild(removeSpan);
-
-            googleTabs.makeRowOrderable(listItem);
-
-            fragment.appendChild(listItem);
-        });
-
-        dvOfflineList.appendChild(fragment);
+        googleTabs.renderOfflineSavedTabRows(filteredTabs);
     },
 
-    removeOfflineSavedTab: async function (e) {
-        e.stopPropagation();
-        const url = this.getAttribute('data-url');
+    renderOfflineSavedTabRows: function (filteredTabs) {
+        const dvOfflineList = document.getElementById('dvOfflineSavedList');
+        if (!dvOfflineList) return;
+        const isOrderable = googleTabs.isOrderable;
+
+        let html = '';
+        for (let i = 0; i < filteredTabs.length; i++) {
+            const tab = filteredTabs[i];
+            const favicon = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
+            const titleEsc = escapeHtml(tab.title || 'Untitled');
+            const urlEsc = escapeHtml(tab.url || '');
+            const downloadIdEsc = escapeHtml(tab.downloadId ? String(tab.downloadId) : '');
+            const sizeEsc = escapeHtml(tab.size || '');
+
+            html += `<div class="tab-item discarded" data-url="${urlEsc}" draggable="${isOrderable}">`
+                + `<span class="tab-drag-handle" title="Drag to reorder">${ICONS.drag_handle}</span>`
+                + `<img src="${favicon}" class="tab-icon" decoding="async" loading="lazy">`
+                + `<span class="tab-title" title="${titleEsc}" data-url="${urlEsc}" data-download-id="${downloadIdEsc}">${titleEsc}</span>`
+                + `<span class="tab-size" style="font-size: 10px; color: var(--icon-color); margin-left: 8px; margin-right: 8px; opacity: 0.7;">${sizeEsc}</span>`
+                + `<span class="tab-save" title="Remove from offline saved" data-url="${urlEsc}">${ICONS.cloud_unsave}</span>`
+                + `</div>`;
+        }
+        dvOfflineList.innerHTML = html;
+        dvOfflineList.dataset.rendered = "true";
+    },
+
+    removeOfflineSavedTab: async function (item) {
+        let el = item;
+        if (item && item.target) {
+            item.stopPropagation();
+            el = item.currentTarget || this;
+        } else if (!el) {
+            el = this;
+        }
+        const url = el.getAttribute('data-url') || (el.parentNode && el.parentNode.getAttribute('data-url'));
+        if (!url) return;
         let offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
 
         const tabToRemove = offlineSavedTabs.find(t => t.url === url);
@@ -868,6 +917,7 @@ var googleTabs = {
         offlineSavedTabs = offlineSavedTabs.filter(t => t.url !== url);
         await googleTabs.setOfflineSavedTabs(offlineSavedTabs);
         googleTabs.renderOfflineSavedTabs();
+        await googleTabs.updateActiveTabIcons();
     },
     initHistorySettings: function() {
         chrome.storage.local.get(['historyRetentionDays', 'lastHistoryCleanup'], function(result) {
@@ -948,91 +998,60 @@ var googleTabs = {
         if (!savedTabs) savedTabs = await googleTabs.getSavedTabs();
         if (!offlineSavedTabs) offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
 
-        var tabList = document.getElementById('dvList');
-        var fragment = document.createDocumentFragment();
+        const tabList = document.getElementById('dvList');
+        if (!tabList) return;
 
         const savedUrls = new Set(savedTabs.map(t => t.url));
         const offlineSavedUrls = new Set(offlineSavedTabs.map(t => t.url));
+        const isOrderable = googleTabs.isOrderable;
 
-        tabs.forEach(function (tab) {
-            var listItem = document.createElement('div');
-            listItem.className = 'tab-item' + (tab.discarded ? ' discarded' : '');
-            listItem.id = tab.id;
-            listItem.setAttribute('data-window-id', tab.windowId);
-
-            var dragHandle = document.createElement('span');
-            dragHandle.className = 'tab-drag-handle';
-            dragHandle.title = 'Drag to reorder';
-            dragHandle.innerHTML = ICONS.drag_handle;
-
-            var innerImage = document.createElement('img');
-            innerImage.src = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
-            innerImage.className = 'tab-icon';
-            innerImage.decoding = 'async';
-            innerImage.onerror = function () {
-                this.onerror = null;
-                this.src = ICONS.globe;
-            };
-
-            var innerSpan = document.createElement('span');
-            innerSpan.className = 'tab-title';
-            innerSpan.textContent = tab.title;
-            innerSpan.title = tab.title;
-            innerSpan.addEventListener("click", googleTabs.tabSelect);
-
-            var closeSpan = document.createElement('span');
-            closeSpan.innerHTML = ICONS.close;
-            closeSpan.className = 'tab-close';
-            closeSpan.title = 'Close tab';
-            closeSpan.addEventListener("click", googleTabs.tabClose);
-
-            var snoozeSpan = document.createElement('span');
-            snoozeSpan.innerHTML = ICONS.snooze;
-            snoozeSpan.className = 'tab-snooze';
-            snoozeSpan.title = 'Discard tab';
-            snoozeSpan.addEventListener('click', googleTabs.tabDiscard);
-
-            var saveSpan = document.createElement('span');
+        let html = '';
+        for (let i = 0; i < tabs.length; i++) {
+            const tab = tabs[i];
             const isSaved = savedUrls.has(tab.url);
-            saveSpan.innerHTML = isSaved ? ICONS.unsave : ICONS.save;
-            saveSpan.className = 'tab-save';
-            saveSpan.title = isSaved ? 'Unbookmark tab' : 'Bookmark tab';
-            saveSpan.setAttribute('data-url', tab.url);
-            saveSpan.addEventListener('click', googleTabs.toggleSaveTab);
-
-            var downloadSpan = document.createElement('span');
             const isOffline = offlineSavedUrls.has(tab.url);
-            downloadSpan.innerHTML = isOffline ? ICONS.cloud_unsave : ICONS.download;
-            downloadSpan.className = 'tab-download';
-            downloadSpan.title = isOffline ? 'Remove from offline saved' : 'Store offline';
-            downloadSpan.setAttribute('data-url', tab.url);
-            downloadSpan.addEventListener('click', googleTabs.tabDownload);
+            const discardedClass = tab.discarded ? ' discarded' : '';
+            const favicon = googleTabs.getFaviconUrl(tab.url, tab.favIconUrl);
+            const titleEsc = escapeHtml(tab.title || 'Untitled');
+            const urlEsc = escapeHtml(tab.url || '');
 
-            listItem.appendChild(dragHandle);
-            listItem.appendChild(innerImage);
-            listItem.appendChild(innerSpan);
-            listItem.appendChild(downloadSpan);
-            listItem.appendChild(saveSpan);
-            listItem.appendChild(snoozeSpan);
-            listItem.appendChild(closeSpan);
+            html += `<div class="tab-item${discardedClass}" id="${tab.id}" data-window-id="${tab.windowId}" draggable="${isOrderable}">`
+                + `<span class="tab-drag-handle" title="Drag to reorder">${ICONS.drag_handle}</span>`
+                + `<img src="${favicon}" class="tab-icon" decoding="async" loading="lazy">`
+                + `<span class="tab-title" title="${titleEsc}">${titleEsc}</span>`
+                + `<span class="tab-download" title="${isOffline ? 'Remove from offline saved' : 'Store offline'}" data-url="${urlEsc}">${isOffline ? ICONS.cloud_unsave : ICONS.download}</span>`
+                + `<span class="tab-save" title="${isSaved ? 'Unbookmark tab' : 'Bookmark tab'}" data-url="${urlEsc}">${isSaved ? ICONS.unsave : ICONS.save}</span>`
+                + `<span class="tab-snooze" title="Discard tab">${ICONS.snooze}</span>`
+                + `<span class="tab-close" title="Close tab">${ICONS.close}</span>`
+                + `</div>`;
+        }
 
-            googleTabs.makeRowOrderable(listItem);
-
-            fragment.appendChild(listItem);
-        });
-
-        tabList.innerHTML = '';
-        tabList.appendChild(fragment);
+        tabList.innerHTML = html;
     },
 
-    tabClose: function () {
-        chrome.tabs.remove(parseInt(this.parentNode.id));
-        document.getElementById(this.parentNode.id).remove();
+    tabClose: function (item) {
+        const el = item || (this && this.parentNode);
+        if (!el) return;
+        const tabId = parseInt(el.id);
+        if (!isNaN(tabId)) {
+            chrome.tabs.remove(tabId);
+            el.remove();
+        }
     },
 
-    tabDownload: async function (e) {
-        e.stopPropagation();
-        const url = this.getAttribute('data-url');
+    tabDownload: async function (item, downloadBtn) {
+        let el = item;
+        let btn = downloadBtn;
+        if (item && item.target) {
+            item.stopPropagation();
+            el = item.currentTarget ? item.currentTarget.parentNode : this.parentNode;
+            btn = item.currentTarget || this;
+        } else if (!el) {
+            el = this && this.parentNode;
+            btn = this;
+        }
+        if (!el) return;
+        const url = (btn && btn.getAttribute('data-url')) || el.getAttribute('data-url');
         if (!url) return;
 
         let offlineSavedTabs = await googleTabs.getOfflineSavedTabs();
@@ -1052,13 +1071,15 @@ var googleTabs = {
             offlineSavedTabs = offlineSavedTabs.filter(t => t.url !== url);
             await googleTabs.setOfflineSavedTabs(offlineSavedTabs);
             googleTabs.renderOfflineSavedTabs();
+            await googleTabs.updateActiveTabIcons();
             return;
         }
 
-        var tabId = parseInt(this.parentNode.id);
-        var titleSpan = this.parentNode.querySelector('.tab-title');
-        var title = titleSpan ? titleSpan.textContent : 'webpage';
-        var filename = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const tabId = parseInt(el.id);
+        if (isNaN(tabId)) return;
+        const titleSpan = el.querySelector('.tab-title');
+        const title = titleSpan ? titleSpan.textContent : 'webpage';
+        const filename = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 
         chrome.tabs.get(tabId, function (tab) {
             chrome.pageCapture.saveAsMHTML({ tabId: tabId }, function (mhtmlData) {
@@ -1068,9 +1089,9 @@ var googleTabs = {
                 }
                 
                 // Force the correct MIME type so Chrome doesn't save it as a .txt file
-                var mhtmlBlob = new Blob([mhtmlData], { type: 'application/x-mimearchive' });
-                var blobUrl = URL.createObjectURL(mhtmlBlob);
-                var sizeInMB = (mhtmlBlob.size / (1024 * 1024)).toFixed(1) + ' MB';
+                const mhtmlBlob = new Blob([mhtmlData], { type: 'application/x-mimearchive' });
+                const blobUrl = URL.createObjectURL(mhtmlBlob);
+                const sizeInMB = (mhtmlBlob.size / (1024 * 1024)).toFixed(1) + ' MB';
                 
                 chrome.downloads.download({
                     url: blobUrl,
@@ -1096,48 +1117,78 @@ var googleTabs = {
         });
     },
 
-    tabDiscard: async function () {
-        var tabId = parseInt(this.parentNode.id);
-        if (this.parentNode.classList.contains('discarded')) {
+    tabDiscard: async function (item) {
+        const el = item || (this && this.parentNode);
+        if (!el) return;
+        const tabId = parseInt(el.id);
+        if (isNaN(tabId)) return;
+        if (el.classList.contains('discarded')) {
             chrome.tabs.reload(tabId);
-            this.parentNode.classList.remove('discarded');
+            el.classList.remove('discarded');
         } else {
             try {
                 const discardedTab = await chrome.tabs.discard(tabId);
                 if (discardedTab && discardedTab.id !== tabId) {
-                    this.parentNode.id = discardedTab.id; // Update ID if it changed
+                    el.id = discardedTab.id; // Update ID if it changed
                 }
-                this.parentNode.classList.add('discarded');
+                el.classList.add('discarded');
             } catch (e) {
                 console.error("Error discarding tab:", e);
             }
         }
     },
 
-    tabSelect: function () {
-        var tabId = parseInt(this.parentNode.id);
-        chrome.tabs.update(tabId, {
-            active: true
-        });
-        this.parentNode.classList.remove('discarded');
+    tabSelect: function (item) {
+        const el = item || (this && this.parentNode);
+        if (!el) return;
+        const tabId = parseInt(el.id);
+        if (!isNaN(tabId)) {
+            chrome.tabs.update(tabId, {
+                active: true
+            });
+            el.classList.remove('discarded');
+        }
     },
 
     init: async function () {
+        // Fast synchronous preview/hydration
+        googleTabs.updateOrderableUI();
+        googleTabs.updateSavedTabsCollapseUI();
+        googleTabs.updateOfflineSavedTabsCollapseUI();
+
         const [openTabs, storage] = await initialDataPromise;
 
-        // 1. Apply theme immediately
+        // 1. Sync theme if storage has different value
         if (storage && storage.theme) {
             document.documentElement.setAttribute('data-theme', storage.theme);
             googleTabs.updateThemeIcon(storage.theme);
+            try { localStorage.setItem('theme', storage.theme); } catch (e) {}
         } else {
             googleTabs.updateThemeIcon();
         }
 
         // 2. Set orderable state
-        googleTabs.isOrderable = !!(storage && storage.isOrderable);
-        googleTabs.updateOrderableUI();
+        if (storage && storage.isOrderable !== undefined) {
+            googleTabs.isOrderable = !!storage.isOrderable;
+            try { localStorage.setItem('isOrderable', googleTabs.isOrderable ? '1' : '0'); } catch (e) {}
+            googleTabs.updateOrderableUI();
+        }
 
-        // 3. Set history settings
+        // 3. Set saved tabs collapse state
+        if (storage && storage.isSavedTabsCollapsed !== undefined) {
+            googleTabs.isSavedTabsCollapsed = !!storage.isSavedTabsCollapsed;
+            try { localStorage.setItem('isSavedTabsCollapsed', googleTabs.isSavedTabsCollapsed ? '1' : '0'); } catch (e) {}
+            googleTabs.updateSavedTabsCollapseUI();
+        }
+
+        // 4. Set offline saved tabs collapse state
+        if (storage && storage.isOfflineSavedTabsCollapsed !== undefined) {
+            googleTabs.isOfflineSavedTabsCollapsed = !!storage.isOfflineSavedTabsCollapsed;
+            try { localStorage.setItem('isOfflineSavedTabsCollapsed', googleTabs.isOfflineSavedTabsCollapsed ? '1' : '0'); } catch (e) {}
+            googleTabs.updateOfflineSavedTabsCollapseUI();
+        }
+
+        // 5. Set history settings
         let days = storage ? storage.historyRetentionDays : undefined;
         if (days === undefined) {
             days = "OFF";
@@ -1162,7 +1213,7 @@ var googleTabs = {
             }
         }
 
-        // 4. Render tab lists concurrently with pre-fetched data
+        // 6. Render lists concurrently with pre-fetched data
         const savedTabs = (storage && storage.savedTabs) || [];
         const offlineSavedTabs = (storage && storage.offlineSavedTabs) || [];
 
@@ -1175,7 +1226,95 @@ var googleTabs = {
 function setupPopup() {
     googleTabs.init();
 
-    var discardIcon = document.getElementById("btnDiscardIcon");
+    // Container event delegation for high-speed click handling
+    const dvList = document.getElementById('dvList');
+    if (dvList) {
+        dvList.addEventListener('click', async function (e) {
+            const item = e.target.closest('.tab-item');
+            if (!item) return;
+
+            const closeBtn = e.target.closest('.tab-close');
+            if (closeBtn) {
+                e.stopPropagation();
+                googleTabs.tabClose(item);
+                return;
+            }
+
+            const snoozeBtn = e.target.closest('.tab-snooze');
+            if (snoozeBtn) {
+                e.stopPropagation();
+                await googleTabs.tabDiscard(item);
+                return;
+            }
+
+            const saveBtn = e.target.closest('.tab-save');
+            if (saveBtn) {
+                e.stopPropagation();
+                await googleTabs.toggleSaveTab(item, saveBtn);
+                return;
+            }
+
+            const downloadBtn = e.target.closest('.tab-download');
+            if (downloadBtn) {
+                e.stopPropagation();
+                await googleTabs.tabDownload(item, downloadBtn);
+                return;
+            }
+
+            const titleSpan = e.target.closest('.tab-title');
+            if (titleSpan) {
+                googleTabs.tabSelect(item);
+                return;
+            }
+        });
+        googleTabs.initContainerDragAndDrop(dvList);
+    }
+
+    const dvSavedList = document.getElementById('dvSavedList');
+    if (dvSavedList) {
+        dvSavedList.addEventListener('click', async function (e) {
+            const item = e.target.closest('.tab-item');
+            if (!item) return;
+
+            const saveBtn = e.target.closest('.tab-save');
+            if (saveBtn) {
+                e.stopPropagation();
+                await googleTabs.unsaveTab(item);
+                return;
+            }
+
+            const titleSpan = e.target.closest('.tab-title');
+            if (titleSpan) {
+                googleTabs.openSavedTab(item);
+                return;
+            }
+        });
+        googleTabs.initContainerDragAndDrop(dvSavedList);
+    }
+
+    const dvOfflineSavedList = document.getElementById('dvOfflineSavedList');
+    if (dvOfflineSavedList) {
+        dvOfflineSavedList.addEventListener('click', async function (e) {
+            const item = e.target.closest('.tab-item');
+            if (!item) return;
+
+            const removeBtn = e.target.closest('.tab-save');
+            if (removeBtn) {
+                e.stopPropagation();
+                await googleTabs.removeOfflineSavedTab(item);
+                return;
+            }
+
+            const titleSpan = e.target.closest('.tab-title');
+            if (titleSpan) {
+                googleTabs.openOfflineSavedTab(item);
+                return;
+            }
+        });
+        googleTabs.initContainerDragAndDrop(dvOfflineSavedList);
+    }
+
+    var discardHomeBtn = document.getElementById("btnDiscardInactiveHome");
     var btnDeleteHistory = document.getElementById("btnDeleteHistory");
     if (btnDeleteHistory) {
         btnDeleteHistory.addEventListener("click", function() {
@@ -1198,9 +1337,6 @@ function setupPopup() {
             });
         });
     }
-    var saveAllBtn = document.getElementById("btnSaveAllIcon");
-    var restoreAllBtn = document.getElementById("btnRestoreAllIcon");
-    var clearAllBtn = document.getElementById("btnClearAllSavedIcon");
     var themeToggleBtn = document.getElementById("btnThemeToggle");
     var titleGroup = document.getElementById("titleGroup");
     var exportBtn = document.getElementById("btnExportIcon");
@@ -1209,13 +1345,9 @@ function setupPopup() {
     var openSettingsBtn = document.getElementById("btnOpenSettings");
     var closeSettingsBtn = document.getElementById("btnCloseSettings");
     var toggleOrderBtn = document.getElementById("btnToggleOrder");
-    var settingOrderToggleBtn = document.getElementById("btnSettingOrderToggle");
 
     if (toggleOrderBtn) {
         toggleOrderBtn.addEventListener("click", googleTabs.toggleOrderable);
-    }
-    if (settingOrderToggleBtn) {
-        settingOrderToggleBtn.addEventListener("click", googleTabs.toggleOrderable);
     }
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener("click", googleTabs.toggleTheme);
@@ -1226,21 +1358,21 @@ function setupPopup() {
     if (closeSettingsBtn) {
         closeSettingsBtn.addEventListener("click", googleTabs.closeSettings);
     }
+    var toggleSavedSettingBtn = document.getElementById("btnToggleSavedTabsSetting");
+    if (toggleSavedSettingBtn) {
+        toggleSavedSettingBtn.addEventListener("click", googleTabs.toggleSavedTabs);
+    }
     if (titleGroup) {
-        titleGroup.addEventListener("click", googleTabs.toggleSavedTabs);
+        titleGroup.addEventListener("click", function () {
+            var collapseIcon = document.getElementById('collapseIcon');
+            if (collapseIcon && collapseIcon.style.display !== 'none') {
+                googleTabs.toggleSavedTabs();
+            }
+        });
     }
     var titleGroupOffline = document.getElementById("titleGroupOffline");
     if (titleGroupOffline) {
         titleGroupOffline.addEventListener("click", googleTabs.toggleOfflineSavedTabs);
-    }
-    if (saveAllBtn) {
-        saveAllBtn.addEventListener("click", googleTabs.saveAllTabs);
-    }
-    if (restoreAllBtn) {
-        restoreAllBtn.addEventListener("click", googleTabs.restoreAllTabs);
-    }
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener("click", googleTabs.clearAllSavedTabs);
     }
     var clearAllOfflineBtn = document.getElementById("btnClearAllOfflineSavedIcon");
     if (clearAllOfflineBtn) {
@@ -1255,11 +1387,15 @@ function setupPopup() {
     if (fileImport) {
         fileImport.addEventListener("change", googleTabs.importTabs);
     }
-    if (discardIcon) {
-        discardIcon.addEventListener("click", function (e) {
+    if (discardHomeBtn) {
+        discardHomeBtn.addEventListener("click", async function (e) {
             e.preventDefault();
             e.stopPropagation();
-            googleTabs.discardInactiveTabs();
+            discardHomeBtn.style.opacity = '1';
+            await googleTabs.discardInactiveTabs();
+            setTimeout(() => {
+                discardHomeBtn.style.opacity = '';
+            }, 300);
         });
     }
 }
